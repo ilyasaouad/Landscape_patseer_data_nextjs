@@ -1,0 +1,34 @@
+{
+  "name": "landscape-nfr-app",
+  "version": "0.2.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@types/plotly.js": "^3.0.8",
+    "csv-parse": "^6.1.0",
+    "lucide-react": "^0.554.0",
+    "next": "^14.1.0",
+    "pino": "^10.1.0",
+    "plotly.js": "^3.3.0",
+    "plotly.js-dist-min": "^3.3.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-plotly.js": "^2.6.0",
+    "recharts": "^3.4.1",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "autoprefixer": "^10.4.16",
+    "postcss": "^8",
+    "tailwindcss": "^3.3.6",
+    "typescript": "^5.3.3"
+  }
+}
