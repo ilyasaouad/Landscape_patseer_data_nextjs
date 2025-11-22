@@ -8,7 +8,7 @@ const Plot = dynamic(async () => {
     const plotly = await import('plotly.js-dist-min')
     const createPlotlyComponent = (await import('react-plotly.js/factory')).default
     return createPlotlyComponent(plotly.default)
-}, { ssr: false })
+}, { ssr: false }) as any
 
 interface TimelineData {
     timelineData: any[]
