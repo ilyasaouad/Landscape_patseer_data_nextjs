@@ -1,4 +1,5 @@
 // app/api/timeline/route.ts
+export const runtime = "nodejs";
 import { NextRequest, NextResponse } from 'next/server'
 import fs from 'fs'
 import path from 'path'
