@@ -39,6 +39,7 @@ export default function Home() {
   const activeCategoryInfo = quantumCategories.find(cat => cat.id === currentCategory)
 
   const renderContent = () => {
+<<<<<<< HEAD
     // Only render content for available categories
     if (!activeCategoryInfo?.available) {
       return (
@@ -60,6 +61,10 @@ export default function Home() {
 
     // Render analysis content for Kvantealgoritmer
     if (currentAnalysis === 'geographic') {
+=======
+    // Primary analysis pages
+    if (currentPage === 'geographic') {
+>>>>>>> 15eabdc22fe493d4e78ad31fa3cbf5c18d4e8c16
       return (
         <div className="fade-in">
           <GeographicAnalysis />
@@ -83,7 +88,11 @@ export default function Home() {
       )
     }
 
+<<<<<<< HEAD
     if (currentAnalysis === 'classification') {
+=======
+    if (currentPage === 'classification') {
+>>>>>>> 15eabdc22fe493d4e78ad31fa3cbf5c18d4e8c16
       return (
         <div className="fade-in">
           <ClassificationAnalysis />
@@ -106,7 +115,11 @@ export default function Home() {
       ),
     }
 
+<<<<<<< HEAD
     return contentMap[currentAnalysis] || (
+=======
+    return contentMap[currentPage] || (
+>>>>>>> 15eabdc22fe493d4e78ad31fa3cbf5c18d4e8c16
       <div className="card">
         <div className="info-box-warning">
           <p className="text-orange-900 font-medium">Page not found</p>
