@@ -1,10 +1,14 @@
 'use client'
 
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useMemo } from 'react'
 import dynamic from 'next/dynamic'
 
 // Dynamically import Plot with no SSR to prevent hydration errors
-const Plot = dynamic(() => import('react-plotly.js'), { ssr: false })
+const Plot = dynamic(async () => {
+    const plotly = await import('plotly.js-dist-min')
+    const createPlotlyComponent = (await import('react-plotly.js/factory')).default
+    return createPlotlyComponent(plotly.default)
+}, { ssr: false })
 
 interface TimelineData {
     timelineData: any[]
@@ -50,33 +54,11 @@ export default function TimelineAnalysis() {
         fetchData()
     }, [mounted])
 
-    if (!mounted) {
-        return null
-    }
-
-    if (loading) {
-        return (
-            <div className="flex items-center justify-center h-96">
-                <div className="text-center">
-                    <div className="inline-block animate-spin rounded-full h-16 w-16 border-4 border-green-200 border-t-green-600 mb-4"></div>
-                    <p className="text-gray-600 font-medium">Loading timeline data...</p>
-                </div>
-            </div>
-        )
-    }
-
-    if (error || !timelineData) {
-        return (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-8">
-                <h3 className="text-lg font-semibold text-red-700 mb-2">⚠️ Error Loading Data</h3>
-                <p className="text-red-600">{error || 'No data available'}</p>
-            </div>
-        )
-    }
-
     // Convert pivot table to long format
-    const prepareLongFormat = () => {
-        const longData: Array<{ owner: string; year: number; count: number }> = []
+    const longData = useMemo(() => {
+        if (!timelineData) return []
+
+        const data: Array<{ owner: string; year: number; count: number }> = []
 
         timelineData.timelineData.forEach((row) => {
             const owner = row[timelineData.ownerKey]
@@ -92,7 +74,7 @@ export default function TimelineAnalysis() {
                 const year = parseInt(yearStr)
 
                 if (count > 0 && year >= 2000 && year <= 2025) {
-                    longData.push({
+                    data.push({
                         owner: owner.replace(/"/g, '').trim(),
                         year,
                         count,
@@ -101,14 +83,21 @@ export default function TimelineAnalysis() {
             })
         })
 
-        console.log('Long format data points:', longData.length)
-        return longData
+        console.log('Long format data points:', data.length)
+        return data
+    }, [timelineData])
+
+    // Helper to truncate company names to 2 words
+    const truncateName = (name: string) => {
+        const words = name.split(' ')
+        if (words.length <= 2) return name
+        return words.slice(0, 2).join(' ') + '...'
     }
 
-    const longData = prepareLongFormat()
-
     // 1. Overall timeline - total patents per year
-    const prepareOverallTimeline = () => {
+    const overallTimelineData = useMemo(() => {
+        if (longData.length === 0) return []
+
         const yearTotals = new Map<number, number>()
 
         longData.forEach((item) => {
@@ -129,17 +118,12 @@ export default function TimelineAnalysis() {
                 name: 'Total Applications',
             },
         ]
-    }
-
-    // Helper to truncate company names to 2 words
-    const truncateName = (name: string) => {
-        const words = name.split(' ')
-        if (words.length <= 2) return name
-        return words.slice(0, 2).join(' ') + '...'
-    }
+    }, [longData])
 
     // 2. Timeline by top 8 owners - Bubble chart with years on X-axis and owners on Y-axis
-    const prepareTopOwnersTimeline = () => {
+    const topOwnersTimelineData = useMemo(() => {
+        if (longData.length === 0) return []
+
         const ownerTotals = new Map<string, number>()
         longData.forEach((item) => {
             const current = ownerTotals.get(item.owner) || 0
@@ -200,10 +184,12 @@ export default function TimelineAnalysis() {
                 showlegend: false,
             }
         ]
-    }
+    }, [longData])
 
     // 3. Prepare heatmap data
-    const prepareHeatmapData = () => {
+    const heatmapData = useMemo(() => {
+        if (longData.length === 0) return null
+
         const ownerTotals = new Map<string, number>()
         longData.forEach((item) => {
             const current = ownerTotals.get(item.owner) || 0
@@ -238,22 +224,99 @@ export default function TimelineAnalysis() {
             colorscale: [[0, '#ffffff'], [1, '#0c4a6e']],
             hoverongaps: false,
         }
-    }
-
-    const overallTimelineData = longData.length > 0 ? prepareOverallTimeline() : []
-    const topOwnersTimelineData = longData.length > 0 ? prepareTopOwnersTimeline() : []
-    const heatmapData = longData.length > 0 ? prepareHeatmapData() : null
+    }, [longData])
 
     // Prepare display table (first 10 rows, cleaned)
-    const displayData = timelineData.timelineData.slice(0, 10).map((row) => {
-        const cleanRow: any = {}
-        Object.keys(row).forEach((key) => {
-            const value = row[key]
-            cleanRow[key] =
-                value === null || value === 'None' || value === 'none' || value === '' ? '—' : value
+    const displayData = useMemo(() => {
+        if (!timelineData) return []
+        return timelineData.timelineData.slice(0, 10).map((row) => {
+            const cleanRow: any = {}
+            Object.keys(row).forEach((key) => {
+                const value = row[key]
+                cleanRow[key] =
+                    value === null || value === 'None' || value === 'none' || value === '' ? '—' : value
+            })
+            return cleanRow
         })
-        return cleanRow
-    })
+    }, [timelineData])
+
+    // Memoize layouts and configs
+    const overallLayout = useMemo(() => ({
+        title: 'Total Patent Applications by Year (All Current Owners)',
+        xaxis: { title: 'Year' },
+        yaxis: { title: 'Number of Patent Applications' },
+        height: 400,
+        plot_bgcolor: '#f9fafb',
+        paper_bgcolor: '#ffffff',
+    }), [])
+
+    const topOwnersLayout = useMemo(() => ({
+        title: 'Patent Applications Timeline by Top Current Owners',
+        xaxis: {
+            title: 'Year',
+            tickmode: 'linear' as const,
+            dtick: 1,
+            side: 'bottom' as const, // Standard position
+        },
+        yaxis: {
+            title: 'Current Owner',
+            automargin: true, // Automatically adjust margin for long names
+            side: 'left' as const,
+        },
+        autosize: true,
+        height: 600,
+        plot_bgcolor: '#f9fafb',
+        paper_bgcolor: '#ffffff',
+        margin: { t: 80, b: 80, r: 20, l: 150 }, // Minimized margins, fixed left for names
+    }), [])
+
+    const heatmapLayout = useMemo(() => ({
+        title: 'Patent Applications Heatmap (Top Owners)',
+        xaxis: {
+            title: 'Year',
+            side: 'top' as const,
+            tickangle: -45,
+        },
+        yaxis: {
+            title: 'Current Owner',
+            side: 'left' as const,
+            autorange: 'reversed' as const,
+        },
+        height: 320,
+        plot_bgcolor: '#ffffff',
+        paper_bgcolor: '#ffffff',
+        margin: { l: 120, b: 50, t: 100 },
+    }), [])
+
+    const defaultConfig = useMemo(() => ({
+        responsive: true,
+        displayModeBar: true,
+        displaylogo: false,
+    }), [])
+
+    if (!mounted) {
+        return null
+    }
+
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center h-96">
+                <div className="text-center">
+                    <div className="inline-block animate-spin rounded-full h-16 w-16 border-4 border-green-200 border-t-green-600 mb-4"></div>
+                    <p className="text-gray-600 font-medium">Loading timeline data...</p>
+                </div>
+            </div>
+        )
+    }
+
+    if (error || !timelineData) {
+        return (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-8">
+                <h3 className="text-lg font-semibold text-red-700 mb-2">⚠️ Error Loading Data</h3>
+                <p className="text-red-600">{error || 'No data available'}</p>
+            </div>
+        )
+    }
 
     return (
         <div className="space-y-6">
@@ -325,19 +388,8 @@ export default function TimelineAnalysis() {
                     <div className="w-full h-96">
                         <Plot
                             data={overallTimelineData}
-                            layout={{
-                                title: 'Total Patent Applications by Year (All Current Owners)',
-                                xaxis: { title: 'Year' },
-                                yaxis: { title: 'Number of Patent Applications' },
-                                height: 400,
-                                plot_bgcolor: '#f9fafb',
-                                paper_bgcolor: '#ffffff',
-                            }}
-                            config={{
-                                responsive: true,
-                                displayModeBar: true,
-                                displaylogo: false,
-                            }}
+                            layout={overallLayout}
+                            config={defaultConfig}
                         />
                     </div>
                 </div>
@@ -352,32 +404,10 @@ export default function TimelineAnalysis() {
                     <div className="w-full h-screen">
                         <Plot
                             data={topOwnersTimelineData}
-                            layout={{
-                                title: 'Patent Applications Timeline by Top Current Owners',
-                                xaxis: {
-                                    title: 'Year',
-                                    tickmode: 'linear',
-                                    dtick: 1,
-                                    side: 'bottom', // Standard position
-                                },
-                                yaxis: {
-                                    title: 'Current Owner',
-                                    automargin: true, // Automatically adjust margin for long names
-                                    side: 'left',
-                                },
-                                autosize: true,
-                                height: 600,
-                                plot_bgcolor: '#f9fafb',
-                                paper_bgcolor: '#ffffff',
-                                margin: { t: 80, b: 80, r: 20, l: 150 }, // Minimized margins, fixed left for names
-                            }}
+                            layout={topOwnersLayout}
                             useResizeHandler={true}
                             style={{ width: '100%', height: '100%' }}
-                            config={{
-                                responsive: true,
-                                displayModeBar: true,
-                                displaylogo: false,
-                            }}
+                            config={defaultConfig}
                         />
                     </div>
                 </div>
@@ -391,28 +421,8 @@ export default function TimelineAnalysis() {
                     <div className="w-full h-80 max-w-2xl mx-auto">
                         <Plot
                             data={[heatmapData]}
-                            layout={{
-                                title: 'Patent Applications Heatmap (Top Owners)',
-                                xaxis: {
-                                    title: 'Year',
-                                    side: 'top',
-                                    tickangle: -45,
-                                },
-                                yaxis: {
-                                    title: 'Current Owner',
-                                    side: 'left',
-                                    autorange: 'reversed',
-                                },
-                                height: 320,
-                                plot_bgcolor: '#ffffff',
-                                paper_bgcolor: '#ffffff',
-                                margin: { l: 120, b: 50, t: 100 },
-                            }}
-                            config={{
-                                responsive: true,
-                                displayModeBar: true,
-                                displaylogo: false,
-                            }}
+                            layout={heatmapLayout}
+                            config={defaultConfig}
                         />
                     </div>
                 </div>

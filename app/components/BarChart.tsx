@@ -3,7 +3,11 @@
 import React from 'react'
 import dynamic from 'next/dynamic'
 
-const Plot = dynamic(() => import('react-plotly.js'), { ssr: false })
+const Plot = dynamic(async () => {
+    const plotly = await import('plotly.js-dist-min')
+    const createPlotlyComponent = (await import('react-plotly.js/factory')).default
+    return createPlotlyComponent(plotly.default)
+}, { ssr: false })
 
 interface BarChartProps {
     data: Array<{ [key: string]: any }>

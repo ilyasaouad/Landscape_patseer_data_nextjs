@@ -13,8 +13,8 @@ dist/
 build/
 
 # Data files
-data/**/*.csv
-data/**/*.xlsx
+#data/**/*.csv
+#data/**/*.xlsx
 
 # Cache
 .cache/
