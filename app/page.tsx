@@ -7,6 +7,7 @@ import dynamic from 'next/dynamic'
 const GeographicAnalysis = dynamic(() => import('./components/GeographicAnalysis'), { ssr: false })
 const EntityAnalysis = dynamic(() => import('./components/EntityAnalysis'), { ssr: false })
 const TimelineAnalysis = dynamic(() => import('./components/TimelineAnalysis'), { ssr: false })
+const ClassificationAnalysis = dynamic(() => import('./components/ClassificationAnalysis'), { ssr: false })
 
 const menuItems = [
   { id: 'geographic', label: 'Geographic Analysis', icon: '📍', color: 'blue' },
@@ -23,6 +24,7 @@ export default function Home() {
   const [currentPage, setCurrentPage] = useState<string>('geographic')
 
   const renderContent = () => {
+    // Primary analysis pages
     if (currentPage === 'geographic') {
       return (
         <div className="fade-in">
@@ -47,19 +49,16 @@ export default function Home() {
       )
     }
 
-    const contentMap: { [key: string]: JSX.Element } = {
-      classification: (
+    if (currentPage === 'classification') {
+      return (
         <div className="fade-in">
-          <div className="card">
-            <h2 className="card-header">🏷️ Classification: IPC/CPC Codes</h2>
-            <p className="text-gray-600 mb-6">Patents classified by IPC and CPC standards</p>
-            <div className="info-box-warning">
-              <p className="text-orange-900 font-medium">Classification analysis coming soon...</p>
-            </div>
-          </div>
+          <ClassificationAnalysis />
         </div>
-      ),
+      )
+    }
 
+    // Coming soon pages
+    const contentMap: { [key: string]: JSX.Element } = {
       norway: (
         <div className="fade-in">
           <div className="card">
@@ -85,7 +84,13 @@ export default function Home() {
       ),
     }
 
-    return contentMap[currentPage] || <div className="card">Page not found</div>
+    return contentMap[currentPage] || (
+      <div className="card">
+        <div className="info-box-warning">
+          <p className="text-orange-900 font-medium">Page not found</p>
+        </div>
+      </div>
+    )
   }
 
   return (
