@@ -5,11 +5,17 @@ import dynamic from 'next/dynamic'
 
 // Dynamically import Plot with no SSR to prevent hydration errors
 // Note: 'as any' is required due to plotly-react type limitations
-const Plot = dynamic(async () => {
-    const plotly = await import('plotly.js-dist-min')
-    const createPlotlyComponent = (await import('react-plotly.js/factory')).default
-    return createPlotlyComponent(plotly.default)
-}, { ssr: false }) as any
+const Plot = dynamic(
+    () => import('react-plotly.js'),
+    {
+        ssr: false,
+        loading: () => (
+            <div className="flex items-center justify-center h-96">
+                <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-200 border-t-blue-600"></div>
+            </div>
+        )
+    }
+) as any
 
 // Constants
 const TOP_OWNERS_CHART_LIMIT = 8
@@ -427,11 +433,10 @@ export default function TimelineAnalysis() {
                         Bubble size and color represents patent count
                     </p>
 
-                    <div className="w-full h-screen">
+                    <div className="w-full" style={{ height: '600px' }}>
                         <Plot
                             data={topOwnersTimelineData}
                             layout={topOwnersLayout}
-                            useResizeHandler={true}
                             style={{ width: '100%', height: '100%' }}
                             config={defaultConfig}
                         />

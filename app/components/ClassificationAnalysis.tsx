@@ -14,13 +14,38 @@ import {
     Line,
 } from 'recharts'
 
+// Constants
+const CHART_COLORS = ['#8884d8', '#82ca9d', '#ffc658', '#ff7300', '#0088fe', '#00C49F', '#FFBB28', '#FF8042']
+const GROUPED_CHART_LIMIT = 8
+
+// Interfaces
+interface ClassificationItem {
+    classification: string
+    total: number
+}
+
+interface OwnerClassification extends Record<string, any> {
+    currentOwner: string
+    total: number
+}
+
+interface YearClassification extends Record<string, any> {
+    year: number
+}
+
 interface ClassificationData {
-    ipcFull: Array<{ classification: string; total: number }>
-    cpcFull: Array<{ classification: string; total: number }>
-    ipcByOwner: Array<Record<string, any>>
-    cpcByOwner: Array<Record<string, any>>
-    cpcByYear: Array<Record<string, any>>
-    ipcByYear: Array<Record<string, any>>
+    ipcFull: ClassificationItem[]
+    cpcFull: ClassificationItem[]
+    ipcByOwner: OwnerClassification[]
+    cpcByOwner: OwnerClassification[]
+    cpcByYear: YearClassification[]
+    ipcByYear: YearClassification[]
+}
+
+interface ClassificationResponse {
+    success: boolean
+    data?: ClassificationData
+    error?: string
 }
 
 export default function ClassificationAnalysis() {
@@ -38,39 +63,13 @@ export default function ClassificationAnalysis() {
             setLoading(true)
             setError(null)
 
-            console.log('Fetching classification data...')
             const response = await fetch('/api/classification')
-            console.log('Response status:', response.status)
-
-            const result = await response.json()
-            console.log('API Response:', result)
+            const result: ClassificationResponse = await response.json()
 
             if (result.success && result.data) {
-                console.log('Data loaded successfully:', {
-                    ipcFull: result.data.ipcFull?.length,
-                    cpcFull: result.data.cpcFull?.length,
-                    ipcByOwner: result.data.ipcByOwner?.length,
-                    cpcByOwner: result.data.cpcByOwner?.length,
-                    ipcByYear: result.data.ipcByYear?.length,
-                    cpcByYear: result.data.cpcByYear?.length,
-                })
-
-                if (result.debug) {
-                    console.log('Debug Info:', result.debug)
-                }
-
                 setData(result.data)
             } else {
-                let errorMsg = result.error || 'Failed to load classification data'
-
-                if (result.debug) {
-                    console.log('Debug Info:', result.debug)
-                    errorMsg += '\n\nFiles found: ' + (result.debug.filesFound?.join(', ') || 'none')
-                    errorMsg += '\nFiles not found: ' + (result.debug.filesNotFound?.join(', ') || 'none')
-                }
-
-                console.error('API Error:', errorMsg)
-                setError(errorMsg)
+                setError(result.error || 'Failed to load classification data')
             }
         } catch (err) {
             const errorMsg = err instanceof Error ? err.message : 'An error occurred'
@@ -83,10 +82,10 @@ export default function ClassificationAnalysis() {
 
     if (loading) {
         return (
-            <div className="flex items-center justify-center min-h-screen">
+            <div className="flex items-center justify-center h-96">
                 <div className="text-center">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-                    <p className="mt-4 text-gray-600">Loading classification data...</p>
+                    <div className="inline-block animate-spin rounded-full h-16 w-16 border-4 border-blue-200 border-t-blue-600 mb-4"></div>
+                    <p className="text-gray-600 font-medium">Loading classification data...</p>
                 </div>
             </div>
         )
@@ -94,64 +93,69 @@ export default function ClassificationAnalysis() {
 
     if (error) {
         return (
-            <div className="p-6">
-                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                    <h3 className="text-red-800 font-semibold">Error Loading Data</h3>
-                    <p className="text-red-600 mt-2">{error}</p>
-                    <button
-                        onClick={fetchClassificationData}
-                        className="mt-4 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
-                    >
-                        Retry
-                    </button>
-                </div>
+            <div className="card border-l-4 border-red-500 bg-red-50">
+                <h3 className="text-xl font-bold text-red-700 mb-2">⚠️ Error Loading Data</h3>
+                <p className="text-red-600 mb-4">{error}</p>
+                <button
+                    onClick={fetchClassificationData}
+                    className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                >
+                    Retry
+                </button>
             </div>
         )
     }
 
     if (!data) {
         return (
-            <div className="p-6">
-                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                    <p className="text-yellow-800">No classification data available.</p>
-                    <button
-                        onClick={fetchClassificationData}
-                        className="mt-4 px-4 py-2 bg-yellow-600 text-white rounded hover:bg-yellow-700"
-                    >
-                        Retry
-                    </button>
-                </div>
+            <div className="card border-l-4 border-yellow-500 bg-yellow-50">
+                <p className="text-yellow-800 mb-4">No classification data available.</p>
+                <button
+                    onClick={fetchClassificationData}
+                    className="px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors"
+                >
+                    Retry
+                </button>
             </div>
         )
     }
 
-    const hasIpcData = (data.ipcFull && data.ipcFull.length > 0) || (data.ipcByOwner && data.ipcByOwner.length > 0)
-    const hasCpcData = (data.cpcFull && data.cpcFull.length > 0) || (data.cpcByOwner && data.cpcByOwner.length > 0)
+    const hasIpcData = data.ipcFull.length > 0 || data.ipcByOwner.length > 0
+    const hasCpcData = data.cpcFull.length > 0 || data.cpcByOwner.length > 0
 
     return (
-        <div className="space-y-8">
+        <div className="space-y-8 fade-in">
             {/* Header */}
-            <div>
-                <h1 className="text-3xl font-bold text-gray-900">IPC and CPC Classification Analysis</h1>
-                <p className="mt-2 text-gray-600">
+            <div className="card">
+                <h1 className="text-3xl font-bold text-gray-900 mb-2 flex items-center gap-3">
+                    <span className="text-4xl">🏷️</span>
+                    IPC and CPC Classification Analysis
+                </h1>
+                <p className="text-gray-600 text-lg">
                     Analyze patent classification data for current owners
                 </p>
             </div>
 
             {/* Educational Info */}
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                <h3 className="text-blue-900 font-semibold mb-2">💡 Why Patents Have Multiple Classifications</h3>
-                <p className="text-blue-800 text-sm leading-relaxed">
+            <div className="card bg-blue-50 border-2 border-blue-200">
+                <h3 className="text-lg font-bold text-blue-900 mb-3">
+                    💡 Why Patents Have Multiple Classifications
+                </h3>
+                <p className="text-blue-800 text-sm leading-relaxed mb-3">
                     A single patent application often covers multiple classification codes because modern inventions
                     typically involve several related technologies or technical areas. For example:
                 </p>
-                <ul className="mt-2 text-blue-800 text-sm space-y-1 list-disc list-inside">
-                    <li>A <strong>quantum computer patent</strong> might include classifications for: quantum computing (G06N),
-                        semiconductor devices (H01L), and data processing (G06F)</li>
-                    <li>A <strong>medical device patent</strong> might span: diagnostic equipment (A61B),
-                        data analysis (G06F), and wireless communication (H04L)</li>
+                <ul className="text-blue-800 text-sm space-y-2 list-disc list-inside ml-4">
+                    <li>
+                        A <strong>quantum computer patent</strong> might include classifications for: quantum computing (G06N),
+                        semiconductor devices (H01L), and data processing (G06F)
+                    </li>
+                    <li>
+                        A <strong>medical device patent</strong> might span: diagnostic equipment (A61B),
+                        data analysis (G06F), and wireless communication (H04L)
+                    </li>
                 </ul>
-                <p className="mt-2 text-blue-800 text-sm">
+                <p className="mt-3 text-blue-800 text-sm">
                     This multi-classification approach ensures patents are discoverable by researchers working in any
                     of the related technical fields and reflects the interdisciplinary nature of modern innovation.
                 </p>
@@ -162,35 +166,38 @@ export default function ClassificationAnalysis() {
                 <button
                     onClick={() => setActiveTab('ipc')}
                     className={`px-6 py-3 font-bold text-sm transition-all rounded-t-lg ${activeTab === 'ipc'
-                        ? 'bg-blue-600 text-white shadow-md'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-800'
+                            ? 'bg-blue-600 text-white shadow-md'
+                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-800'
                         }`}
+                    aria-current={activeTab === 'ipc' ? 'page' : undefined}
                 >
                     IPC Analysis
                 </button>
                 <button
                     onClick={() => setActiveTab('cpc')}
                     className={`px-6 py-3 font-bold text-sm transition-all rounded-t-lg ${activeTab === 'cpc'
-                        ? 'bg-blue-600 text-white shadow-md'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-800'
+                            ? 'bg-blue-600 text-white shadow-md'
+                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-800'
                         }`}
+                    aria-current={activeTab === 'cpc' ? 'page' : undefined}
                 >
                     CPC Analysis
                 </button>
             </div>
 
+            {/* IPC Tab Content */}
             {activeTab === 'ipc' && (
                 <div className="space-y-8">
                     {!hasIpcData && (
-                        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                        <div className="card border-2 border-dashed border-yellow-300 bg-yellow-50">
                             <p className="text-yellow-800">No IPC data available. Please check if the CSV files exist.</p>
                         </div>
                     )}
 
                     {/* Top 10 IPC Classifications */}
-                    {data.ipcFull && data.ipcFull.length > 0 && (
-                        <section className="bg-white rounded-lg shadow p-6">
-                            <h2 className="text-2xl font-bold text-gray-900 mb-4">📋 Top 10 IPC Classifications</h2>
+                    {data.ipcFull.length > 0 && (
+                        <section className="card">
+                            <h2 className="text-2xl font-bold text-gray-900 mb-6">📋 Top 10 IPC Classifications</h2>
 
                             {/* Data Table */}
                             <div className="overflow-x-auto mb-6">
@@ -241,8 +248,8 @@ export default function ClassificationAnalysis() {
                     )}
 
                     {/* Top 15 Owners - IPC */}
-                    {data.ipcByOwner && data.ipcByOwner.length > 0 && (
-                        <section className="bg-white rounded-lg shadow p-6">
+                    {data.ipcByOwner.length > 0 && (
+                        <section className="card">
                             <h2 className="text-2xl font-bold text-gray-900 mb-4">
                                 Top 15 Current Owners - Top 5 IPC Classifications
                             </h2>
@@ -250,19 +257,19 @@ export default function ClassificationAnalysis() {
                             <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-6">
                                 <h3 className="text-gray-900 font-semibold mb-2">IPC Classification Descriptions:</h3>
                                 <ul className="space-y-2 text-sm text-gray-700">
-                                    <li><strong>G06N10/40:</strong> Physical realisations or architectures of quantum processors or components for manipulating qubits, e.g. qubit coupling or qubit control</li>
+                                    <li><strong>G06N10/40:</strong> Physical realisations or architectures of quantum processors or components for manipulating qubits</li>
                                     <li><strong>G06N10/00:</strong> Quantum computing, i.e. information processing based on quantum-mechanical phenomena</li>
-                                    <li><strong>H10N69/00:</strong> Integrated devices, or assemblies of multiple devices, comprising at least one superconducting element covered by group</li>
+                                    <li><strong>H10N69/00:</strong> Integrated devices comprising at least one superconducting element</li>
                                     <li><strong>G06N10/20:</strong> Models of quantum computing, e.g. quantum circuits or universal quantum computers</li>
-                                    <li><strong>B82Y10/00:</strong> Nanotechnology for information processing, storage or transmission, e.g. quantum computing or single electron logic</li>
+                                    <li><strong>B82Y10/00:</strong> Nanotechnology for information processing, storage or transmission</li>
                                 </ul>
                             </div>
 
                             <OwnerClassificationTable data={data.ipcByOwner} type="IPC" />
 
-                            {data.ipcByOwner.length >= 8 && (
+                            {data.ipcByOwner.length >= GROUPED_CHART_LIMIT && (
                                 <div className="mt-8">
-                                    <GroupedBarChart data={data.ipcByOwner.slice(0, 8)} type="IPC" />
+                                    <GroupedBarChart data={data.ipcByOwner.slice(0, GROUPED_CHART_LIMIT)} type="IPC" />
                                 </div>
                             )}
 
@@ -273,8 +280,8 @@ export default function ClassificationAnalysis() {
                     )}
 
                     {/* Temporal Analysis - IPC */}
-                    {data.ipcByYear && data.ipcByYear.length > 0 && (
-                        <section className="bg-white rounded-lg shadow p-6">
+                    {data.ipcByYear.length > 0 && (
+                        <section className="card">
                             <h2 className="text-2xl font-bold text-gray-900 mb-4">
                                 Temporal Analysis - IPC Classifications Over Time
                             </h2>
@@ -297,15 +304,15 @@ export default function ClassificationAnalysis() {
             {activeTab === 'cpc' && (
                 <div className="space-y-8">
                     {!hasCpcData && (
-                        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                        <div className="card border-2 border-dashed border-yellow-300 bg-yellow-50">
                             <p className="text-yellow-800">No CPC data available. Please check if the CSV files exist.</p>
                         </div>
                     )}
 
                     {/* Top 10 CPC Classifications */}
-                    {data.cpcFull && data.cpcFull.length > 0 && (
-                        <section className="bg-white rounded-lg shadow p-6">
-                            <h2 className="text-2xl font-bold text-gray-900 mb-4">🏷️ Top 10 CPC Classifications</h2>
+                    {data.cpcFull.length > 0 && (
+                        <section className="card">
+                            <h2 className="text-2xl font-bold text-gray-900 mb-6">🏷️ Top 10 CPC Classifications</h2>
 
                             {/* Data Table */}
                             <div className="overflow-x-auto mb-6">
@@ -356,17 +363,17 @@ export default function ClassificationAnalysis() {
                     )}
 
                     {/* Top 15 Owners - CPC */}
-                    {data.cpcByOwner && data.cpcByOwner.length > 0 && (
-                        <section className="bg-white rounded-lg shadow p-6">
+                    {data.cpcByOwner.length > 0 && (
+                        <section className="card">
                             <h2 className="text-2xl font-bold text-gray-900 mb-4">
                                 Top 15 Current Owners - Top 5 CPC Classifications
                             </h2>
 
                             <OwnerClassificationTable data={data.cpcByOwner} type="CPC" />
 
-                            {data.cpcByOwner.length >= 8 && (
+                            {data.cpcByOwner.length >= GROUPED_CHART_LIMIT && (
                                 <div className="mt-8">
-                                    <GroupedBarChart data={data.cpcByOwner.slice(0, 8)} type="CPC" />
+                                    <GroupedBarChart data={data.cpcByOwner.slice(0, GROUPED_CHART_LIMIT)} type="CPC" />
                                 </div>
                             )}
 
@@ -377,9 +384,9 @@ export default function ClassificationAnalysis() {
                     )}
 
                     {/* Example Analysis - Top Company */}
-                    <section className="bg-green-50 border border-green-200 rounded-lg p-6">
-                        <h3 className="text-lg font-bold text-green-900 mb-4">4. Example Analysis - Top Company</h3>
-                        <h4 className="font-semibold text-green-800 mb-2">📋 Example Analysis (Not Deep Analysis)</h4>
+                    <section className="card bg-green-50 border-2 border-green-200">
+                        <h3 className="text-lg font-bold text-green-900 mb-4">📋 Example Analysis - Top Company</h3>
+                        <p className="text-sm text-green-700 mb-4 italic">(Example only - not comprehensive analysis)</p>
 
                         <div className="mb-4">
                             <p className="text-green-800"><strong>Company:</strong> IQM FINLAND OY</p>
@@ -408,16 +415,17 @@ export default function ClassificationAnalysis() {
                             </p>
                         </div>
 
-                        <div className="mt-4 pt-4 border-t border-green-200">
-                            <p className="text-green-800 text-xs italic">
-                                ⚠️ <strong>Note:</strong> This is a basic example analysis showing how to interpret classification connections. A NOT comprehensive analysis.
+                        <div className="mt-4 pt-4 border-t border-green-300">
+                            <p className="text-green-800 text-xs">
+                                ⚠️ <strong>Note:</strong> This is a basic example showing how to interpret classification connections.
+                                Not a comprehensive analysis.
                             </p>
                         </div>
                     </section>
 
-                    {/* Temporal Analysis */}
-                    {data.cpcByYear && data.cpcByYear.length > 0 && (
-                        <section className="bg-white rounded-lg shadow p-6">
+                    {/* Temporal Analysis - CPC */}
+                    {data.cpcByYear.length > 0 && (
+                        <section className="card">
                             <h2 className="text-2xl font-bold text-gray-900 mb-4">
                                 Temporal Analysis - CPC Classifications Over Time
                             </h2>
@@ -440,7 +448,7 @@ export default function ClassificationAnalysis() {
 }
 
 // Owner Classification Table Component
-function OwnerClassificationTable({ data, type }: { data: Array<Record<string, any>>, type: string }) {
+function OwnerClassificationTable({ data, type }: { data: OwnerClassification[], type: string }) {
     if (!data || data.length === 0) return null
 
     const classificationKeys = Object.keys(data[0] || {}).filter(
@@ -495,7 +503,7 @@ function OwnerClassificationTable({ data, type }: { data: Array<Record<string, a
 }
 
 // Grouped Bar Chart Component
-function GroupedBarChart({ data, type }: { data: Array<Record<string, any>>, type: string }) {
+function GroupedBarChart({ data, type }: { data: OwnerClassification[], type: string }) {
     if (!data || data.length === 0) return null
 
     const classificationKeys = Object.keys(data[0] || {}).filter(
@@ -509,8 +517,6 @@ function GroupedBarChart({ data, type }: { data: Array<Record<string, any>>, typ
         })
         return newRow
     })
-
-    const colors = ['#8884d8', '#82ca9d', '#ffc658', '#ff7300', '#0088fe', '#00C49F', '#FFBB28', '#FF8042']
 
     return (
         <div className="h-96">
@@ -526,7 +532,7 @@ function GroupedBarChart({ data, type }: { data: Array<Record<string, any>>, typ
                     <Tooltip />
                     <Legend />
                     {classificationKeys.map((key, index) => (
-                        <Bar key={key} dataKey={key} fill={colors[index % colors.length]} />
+                        <Bar key={key} dataKey={key} fill={CHART_COLORS[index % CHART_COLORS.length]} />
                     ))}
                 </BarChart>
             </ResponsiveContainer>
@@ -535,7 +541,7 @@ function GroupedBarChart({ data, type }: { data: Array<Record<string, any>>, typ
 }
 
 // Heatmap Component
-function Heatmap({ data, type }: { data: Array<Record<string, any>>, type: string }) {
+function Heatmap({ data, type }: { data: OwnerClassification[], type: string }) {
     if (!data || data.length === 0) return null
 
     const classificationKeys = Object.keys(data[0] || {}).filter(
@@ -546,7 +552,8 @@ function Heatmap({ data, type }: { data: Array<Record<string, any>>, type: strin
     let maxValue = 0
     data.forEach(row => {
         classificationKeys.forEach(key => {
-            if (row[key] > maxValue) maxValue = row[key]
+            const value = row[key] || 0
+            if (value > maxValue) maxValue = value
         })
     })
 
@@ -554,9 +561,9 @@ function Heatmap({ data, type }: { data: Array<Record<string, any>>, type: strin
         if (value === 0) return '#f3f4f6' // gray-100
         const intensity = Math.min(value / maxValue, 1)
         // Blue scale
-        const r = Math.round(255 - (255 - 37) * intensity) // 37 is blue-600 r
-        const g = Math.round(255 - (255 - 99) * intensity) // 99 is blue-600 g
-        const b = Math.round(255 - (255 - 235) * intensity) // 235 is blue-600 b
+        const r = Math.round(255 - (255 - 37) * intensity)
+        const g = Math.round(255 - (255 - 99) * intensity)
+        const b = Math.round(255 - (255 - 235) * intensity)
         return `rgb(${r}, ${g}, ${b})`
     }
 
@@ -579,16 +586,22 @@ function Heatmap({ data, type }: { data: Array<Record<string, any>>, type: strin
                             <div className="p-2 text-sm font-medium text-gray-900 border-t border-gray-100">
                                 {row.currentOwner}
                             </div>
-                            {classificationKeys.map(key => (
-                                <div
-                                    key={key}
-                                    className="p-2 text-xs text-center border-t border-gray-100 flex items-center justify-center"
-                                    style={{ backgroundColor: getColor(row[key] || 0), color: (row[key] || 0) > maxValue / 2 ? 'white' : 'black' }}
-                                    title={`${row.currentOwner} - ${key}: ${row[key] || 0}`}
-                                >
-                                    {row[key] || 0}
-                                </div>
-                            ))}
+                            {classificationKeys.map(key => {
+                                const value = row[key] || 0
+                                return (
+                                    <div
+                                        key={key}
+                                        className="p-2 text-xs text-center border-t border-gray-100 flex items-center justify-center"
+                                        style={{
+                                            backgroundColor: getColor(value),
+                                            color: value > maxValue / 2 ? 'white' : 'black'
+                                        }}
+                                        title={`${row.currentOwner} - ${key}: ${value}`}
+                                    >
+                                        {value}
+                                    </div>
+                                )
+                            })}
                         </React.Fragment>
                     ))}
                 </div>
@@ -598,14 +611,12 @@ function Heatmap({ data, type }: { data: Array<Record<string, any>>, type: strin
 }
 
 // Temporal Chart Component
-function TemporalChart({ data }: { data: Array<Record<string, any>> }) {
+function TemporalChart({ data }: { data: YearClassification[] }) {
     if (!data || data.length === 0) return null
 
     const classificationKeys = Object.keys(data[0] || {}).filter(
         key => key !== 'year' && key !== 'total'
     )
-
-    const colors = ['#8884d8', '#82ca9d', '#ffc658', '#ff7300', '#0088fe', '#00C49F', '#FFBB28', '#FF8042']
 
     return (
         <div className="h-96">
@@ -624,7 +635,7 @@ function TemporalChart({ data }: { data: Array<Record<string, any>> }) {
                             key={key}
                             type="monotone"
                             dataKey={key}
-                            stroke={colors[index % colors.length]}
+                            stroke={CHART_COLORS[index % CHART_COLORS.length]}
                             activeDot={{ r: 8 }}
                         />
                     ))}

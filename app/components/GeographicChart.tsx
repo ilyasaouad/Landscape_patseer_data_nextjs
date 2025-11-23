@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, useMemo, memo } from 'react'
 import dynamic from 'next/dynamic'
+import { Data } from 'plotly.js'
 
 const Plot = dynamic(() => import('react-plotly.js'), { ssr: false })
 
@@ -17,21 +18,6 @@ interface GeographicChartProps {
   title: string
   colorscale?: 'OrRd' | 'Purples' | 'Blues' | 'Viridis'
   scope?: 'world' | 'europe'
-}
-
-interface ChoroplethTrace {
-  type: 'choropleth'
-  locationmode: 'ISO-3'
-  locations: string[]
-  z: number[]
-  text: string[]
-  hovertemplate: string
-  colorscale: string
-  showscale: boolean
-  colorbar: {
-    title: string
-    titleside: 'right' | 'left'
-  }
 }
 
 interface GeoLayout {
@@ -63,7 +49,7 @@ const GeographicChartComponent = memo(function GeographicChart({
   colorscale = 'OrRd',
   scope = 'world',
 }: GeographicChartProps) {
-  const [plotData, setPlotData] = useState<ChoroplethTrace[]>([])
+  const [plotData, setPlotData] = useState<Data[]>([])
   const [layout, setLayout] = useState<GeoLayout | {}>({})
   const [error, setError] = useState<string | null>(null)
 
@@ -103,7 +89,7 @@ const GeographicChartComponent = memo(function GeographicChart({
     try {
       const { locations, values, text } = processedGeoData
 
-      const choroplethData: ChoroplethTrace = {
+      const choroplethData: Partial<Data> = {
         type: 'choropleth',
         locationmode: 'ISO-3',
         locations: locations as string[],
@@ -113,8 +99,7 @@ const GeographicChartComponent = memo(function GeographicChart({
         colorscale: COLORSCALES[colorscale] || 'Reds',
         showscale: true,
         colorbar: {
-          title: 'Patent Count',
-          titleside: 'right',
+          title: { text: 'Patent Count', side: 'right' },
         },
       }
 
@@ -134,7 +119,7 @@ const GeographicChartComponent = memo(function GeographicChart({
         responsive: true,
       }
 
-      setPlotData([choroplethData])
+      setPlotData([choroplethData as Data])
       setLayout(mapLayout)
       setError(null)
     } catch (err) {
