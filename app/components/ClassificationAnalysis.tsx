@@ -125,8 +125,8 @@ export default function ClassificationAnalysis() {
         )
     }
 
-    const hasIpcData = data.ipcFull?.length > 0 || data.ipcByOwner?.length > 0
-    const hasCpcData = data.cpcFull?.length > 0 || data.cpcByOwner?.length > 0
+    const hasIpcData = (data.ipcFull && data.ipcFull.length > 0) || (data.ipcByOwner && data.ipcByOwner.length > 0)
+    const hasCpcData = (data.cpcFull && data.cpcFull.length > 0) || (data.cpcByOwner && data.cpcByOwner.length > 0)
 
     return (
         <div className="space-y-8">
@@ -155,6 +155,28 @@ export default function ClassificationAnalysis() {
                     This multi-classification approach ensures patents are discoverable by researchers working in any
                     of the related technical fields and reflects the interdisciplinary nature of modern innovation.
                 </p>
+            </div>
+
+            {/* Tab Navigation */}
+            <div className="flex gap-2 border-b border-gray-200">
+                <button
+                    onClick={() => setActiveTab('ipc')}
+                    className={`px-6 py-3 font-bold text-sm transition-all rounded-t-lg ${activeTab === 'ipc'
+                        ? 'bg-blue-600 text-white shadow-md'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-800'
+                        }`}
+                >
+                    IPC Analysis
+                </button>
+                <button
+                    onClick={() => setActiveTab('cpc')}
+                    className={`px-6 py-3 font-bold text-sm transition-all rounded-t-lg ${activeTab === 'cpc'
+                        ? 'bg-blue-600 text-white shadow-md'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-800'
+                        }`}
+                >
+                    CPC Analysis
+                </button>
             </div>
 
             {activeTab === 'ipc' && (
@@ -224,6 +246,17 @@ export default function ClassificationAnalysis() {
                             <h2 className="text-2xl font-bold text-gray-900 mb-4">
                                 Top 15 Current Owners - Top 5 IPC Classifications
                             </h2>
+
+                            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-6">
+                                <h3 className="text-gray-900 font-semibold mb-2">IPC Classification Descriptions:</h3>
+                                <ul className="space-y-2 text-sm text-gray-700">
+                                    <li><strong>G06N10/40:</strong> Physical realisations or architectures of quantum processors or components for manipulating qubits, e.g. qubit coupling or qubit control</li>
+                                    <li><strong>G06N10/00:</strong> Quantum computing, i.e. information processing based on quantum-mechanical phenomena</li>
+                                    <li><strong>H10N69/00:</strong> Integrated devices, or assemblies of multiple devices, comprising at least one superconducting element covered by group</li>
+                                    <li><strong>G06N10/20:</strong> Models of quantum computing, e.g. quantum circuits or universal quantum computers</li>
+                                    <li><strong>B82Y10/00:</strong> Nanotechnology for information processing, storage or transmission, e.g. quantum computing or single electron logic</li>
+                                </ul>
+                            </div>
 
                             <OwnerClassificationTable data={data.ipcByOwner} type="IPC" />
 
@@ -343,6 +376,45 @@ export default function ClassificationAnalysis() {
                         </section>
                     )}
 
+                    {/* Example Analysis - Top Company */}
+                    <section className="bg-green-50 border border-green-200 rounded-lg p-6">
+                        <h3 className="text-lg font-bold text-green-900 mb-4">4. Example Analysis - Top Company</h3>
+                        <h4 className="font-semibold text-green-800 mb-2">📋 Example Analysis (Not Deep Analysis)</h4>
+
+                        <div className="mb-4">
+                            <p className="text-green-800"><strong>Company:</strong> IQM FINLAND OY</p>
+                            <p className="text-green-800"><strong>Total Patents:</strong> 92</p>
+                        </div>
+
+                        <div className="mb-4">
+                            <p className="font-semibold text-green-800 mb-2">Top Classification Areas:</p>
+                            <p className="text-green-800 text-sm mb-2">IQM FINLAND OY shows patent activity across 5 different CPC classifications:</p>
+                            <ol className="list-decimal list-inside text-green-800 text-sm space-y-1 ml-2">
+                                <li><strong>G06N10/40:</strong> 56 patents (60.9% of portfolio)</li>
+                                <li><strong>H10N69/00:</strong> 25 patents (27.2% of portfolio)</li>
+                                <li><strong>G06N10/20:</strong> 20 patents (21.7% of portfolio)</li>
+                                <li><strong>G06N10/00:</strong> 17 patents (18.5% of portfolio)</li>
+                                <li><strong>B82Y10/00:</strong> 6 patents (6.5% of portfolio)</li>
+                            </ol>
+                        </div>
+
+                        <div className="mb-4">
+                            <p className="font-semibold text-green-800 mb-1">📊 Simple Interpretation:</p>
+                            <p className="text-green-800 text-sm">
+                                IQM FINLAND OY has a highly concentrated patent portfolio with 60.9% of patents in G06N10/40.
+                            </p>
+                            <p className="text-green-800 text-sm mt-1">
+                                <strong>Pattern:</strong> The company shows strong specialization across 5 classification areas.
+                            </p>
+                        </div>
+
+                        <div className="mt-4 pt-4 border-t border-green-200">
+                            <p className="text-green-800 text-xs italic">
+                                ⚠️ <strong>Note:</strong> This is a basic example analysis showing how to interpret classification connections. A NOT comprehensive analysis.
+                            </p>
+                        </div>
+                    </section>
+
                     {/* Temporal Analysis */}
                     {data.cpcByYear && data.cpcByYear.length > 0 && (
                         <section className="bg-white rounded-lg shadow p-6">
@@ -430,46 +502,34 @@ function GroupedBarChart({ data, type }: { data: Array<Record<string, any>>, typ
         key => key !== 'currentOwner' && key !== 'total'
     )
 
-    if (classificationKeys.length === 0) return null
+    const chartData = data.map(row => {
+        const newRow: any = { name: row.currentOwner }
+        classificationKeys.forEach(key => {
+            newRow[key] = row[key] || 0
+        })
+        return newRow
+    })
 
-    const colors = ['#8884d8', '#82ca9d', '#ffc658', '#ff8042', '#a4de6c']
-
-    const chartData = data.map(row => ({
-        name: row.currentOwner,
-        ...Object.fromEntries(classificationKeys.map(key => [key, row[key] || 0]))
-    }))
+    const colors = ['#8884d8', '#82ca9d', '#ffc658', '#ff7300', '#0088fe', '#00C49F', '#FFBB28', '#FF8042']
 
     return (
-        <div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                Top {data.length} Companies - {type} Patent Distribution
-            </h3>
-            <div className="h-96">
-                <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 80 }}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis
-                            dataKey="name"
-                            angle={-45}
-                            textAnchor="end"
-                            height={100}
-                            interval={0}
-                            tick={{ fontSize: 10 }}
-                        />
-                        <YAxis />
-                        <Tooltip />
-                        <Legend />
-                        {classificationKeys.map((key, idx) => (
-                            <Bar
-                                key={key}
-                                dataKey={key}
-                                fill={colors[idx % colors.length]}
-                                name={key}
-                            />
-                        ))}
-                    </BarChart>
-                </ResponsiveContainer>
-            </div>
+        <div className="h-96">
+            <h3 className="text-lg font-semibold text-gray-800 mb-4">Distribution by Owner</h3>
+            <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                    data={chartData}
+                    margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                >
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="name" tick={{ fontSize: 10 }} interval={0} angle={-45} textAnchor="end" height={80} />
+                    <YAxis />
+                    <Tooltip />
+                    <Legend />
+                    {classificationKeys.map((key, index) => (
+                        <Bar key={key} dataKey={key} fill={colors[index % colors.length]} />
+                    ))}
+                </BarChart>
+            </ResponsiveContainer>
         </div>
     )
 }
@@ -482,66 +542,56 @@ function Heatmap({ data, type }: { data: Array<Record<string, any>>, type: strin
         key => key !== 'currentOwner' && key !== 'total'
     )
 
-    if (classificationKeys.length === 0) return null
+    // Calculate max value for color scaling
+    let maxValue = 0
+    data.forEach(row => {
+        classificationKeys.forEach(key => {
+            if (row[key] > maxValue) maxValue = row[key]
+        })
+    })
 
-    const getColor = (value: number, max: number) => {
-        if (value === 0) return '#f9fafb'
-        const intensity = value / max
-        const hue = 210 // Blue hue
-        const lightness = 90 - intensity * 40
-        return `hsl(${hue}, 70%, ${lightness}%)`
+    const getColor = (value: number) => {
+        if (value === 0) return '#f3f4f6' // gray-100
+        const intensity = Math.min(value / maxValue, 1)
+        // Blue scale
+        const r = Math.round(255 - (255 - 37) * intensity) // 37 is blue-600 r
+        const g = Math.round(255 - (255 - 99) * intensity) // 99 is blue-600 g
+        const b = Math.round(255 - (255 - 235) * intensity) // 235 is blue-600 b
+        return `rgb(${r}, ${g}, ${b})`
     }
 
-    const maxValue = Math.max(
-        ...data.flatMap(row =>
-            classificationKeys.map(key => row[key] || 0)
-        )
-    )
-
     return (
-        <div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                {type} Patent Activity Heatmap
-            </h3>
-            <div className="overflow-x-auto">
-                <table className="min-w-full border-collapse">
-                    <thead>
-                        <tr>
-                            <th className="border border-gray-300 px-4 py-2 bg-gray-50 text-sm font-medium text-gray-700">
-                                Owner
-                            </th>
+        <div className="overflow-x-auto">
+            <h3 className="text-lg font-semibold text-gray-800 mb-4">Concentration Heatmap</h3>
+            <div className="min-w-full">
+                <div className="grid" style={{ gridTemplateColumns: `auto repeat(${classificationKeys.length}, 1fr)` }}>
+                    {/* Header Row */}
+                    <div className="p-2 font-medium text-gray-500 text-xs">Owner</div>
+                    {classificationKeys.map(key => (
+                        <div key={key} className="p-2 font-medium text-gray-500 text-xs text-center break-all">
+                            {key}
+                        </div>
+                    ))}
+
+                    {/* Data Rows */}
+                    {data.map((row, idx) => (
+                        <React.Fragment key={idx}>
+                            <div className="p-2 text-sm font-medium text-gray-900 border-t border-gray-100">
+                                {row.currentOwner}
+                            </div>
                             {classificationKeys.map(key => (
-                                <th
+                                <div
                                     key={key}
-                                    className="border border-gray-300 px-4 py-2 bg-gray-50 text-sm font-medium text-gray-700"
+                                    className="p-2 text-xs text-center border-t border-gray-100 flex items-center justify-center"
+                                    style={{ backgroundColor: getColor(row[key] || 0), color: (row[key] || 0) > maxValue / 2 ? 'white' : 'black' }}
+                                    title={`${row.currentOwner} - ${key}: ${row[key] || 0}`}
                                 >
-                                    {key}
-                                </th>
+                                    {row[key] || 0}
+                                </div>
                             ))}
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {data.map((row, idx) => (
-                            <tr key={idx}>
-                                <td className="border border-gray-300 px-4 py-2 text-sm font-medium text-gray-900 bg-gray-50">
-                                    {row.currentOwner}
-                                </td>
-                                {classificationKeys.map(key => {
-                                    const value = row[key] || 0
-                                    return (
-                                        <td
-                                            key={key}
-                                            className="border border-gray-300 px-4 py-2 text-center text-sm"
-                                            style={{ backgroundColor: getColor(value, maxValue) }}
-                                        >
-                                            {value > 0 ? value : ''}
-                                        </td>
-                                    )
-                                })}
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
+                        </React.Fragment>
+                    ))}
+                </div>
             </div>
         </div>
     )
@@ -551,41 +601,31 @@ function Heatmap({ data, type }: { data: Array<Record<string, any>>, type: strin
 function TemporalChart({ data }: { data: Array<Record<string, any>> }) {
     if (!data || data.length === 0) return null
 
-    const classificationKeys = Object.keys(data[0] || {}).filter(key => key !== 'year')
+    const classificationKeys = Object.keys(data[0] || {}).filter(
+        key => key !== 'year' && key !== 'total'
+    )
 
-    if (classificationKeys.length === 0) {
-        return (
-            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                <p className="text-yellow-800">No temporal classification data available.</p>
-            </div>
-        )
-    }
-
-    const colors = ['#8884d8', '#82ca9d', '#ffc658', '#ff8042', '#a4de6c']
+    const colors = ['#8884d8', '#82ca9d', '#ffc658', '#ff7300', '#0088fe', '#00C49F', '#FFBB28', '#FF8042']
 
     return (
         <div className="h-96">
             <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={data} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                <LineChart
+                    data={data}
+                    margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                >
                     <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis
-                        dataKey="year"
-                        type="number"
-                        domain={['dataMin', 'dataMax']}
-                        tickFormatter={(value) => value.toString()}
-                    />
+                    <XAxis dataKey="year" />
                     <YAxis />
                     <Tooltip />
                     <Legend />
-                    {classificationKeys.map((key, idx) => (
+                    {classificationKeys.map((key, index) => (
                         <Line
                             key={key}
                             type="monotone"
                             dataKey={key}
-                            stroke={colors[idx % colors.length]}
-                            strokeWidth={2}
-                            dot={{ r: 3 }}
-                            name={key}
+                            stroke={colors[index % colors.length]}
+                            activeDot={{ r: 8 }}
                         />
                     ))}
                 </LineChart>

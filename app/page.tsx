@@ -3,14 +3,54 @@
 import { useState } from 'react'
 import dynamic from 'next/dynamic'
 
+// Constants
+const DEFAULT_CATEGORY = 'kvantealgoritmer'
+const DEFAULT_ANALYSIS = 'geographic'
+
+// Loading component
+const LoadingSpinner = () => (
+  <div className="flex items-center justify-center h-96">
+    <div className="text-center">
+      <div className="inline-block animate-spin rounded-full h-16 w-16 border-4 border-blue-200 border-t-blue-600 mb-4"></div>
+      <p className="text-gray-600 font-medium">Loading component...</p>
+    </div>
+  </div>
+)
+
 // Dynamically import components to avoid SSR issues
-const GeographicAnalysis = dynamic(() => import('./components/GeographicAnalysis'), { ssr: false })
-const EntityAnalysis = dynamic(() => import('./components/EntityAnalysis'), { ssr: false })
-const TimelineAnalysis = dynamic(() => import('./components/TimelineAnalysis'), { ssr: false })
-const ClassificationAnalysis = dynamic(() => import('./components/ClassificationAnalysis'), { ssr: false })
+const GeographicAnalysis = dynamic(() => import('./components/GeographicAnalysis'), {
+  ssr: false,
+  loading: () => <LoadingSpinner />
+})
+const EntityAnalysis = dynamic(() => import('./components/EntityAnalysis'), {
+  ssr: false,
+  loading: () => <LoadingSpinner />
+})
+const TimelineAnalysis = dynamic(() => import('./components/TimelineAnalysis'), {
+  ssr: false,
+  loading: () => <LoadingSpinner />
+})
+const ClassificationAnalysis = dynamic(() => import('./components/ClassificationAnalysis'), {
+  ssr: false,
+  loading: () => <LoadingSpinner />
+})
+
+// Interfaces
+interface QuantumCategory {
+  id: string
+  label: string
+  class: string
+  available: boolean
+}
+
+interface AnalysisMenuItem {
+  id: string
+  label: string
+  icon: string
+}
 
 // Quantum category configurations
-const quantumCategories = [
+const quantumCategories: QuantumCategory[] = [
   { id: 'kvantedatamaskinvare', label: 'Kvantedatamaskinvare', class: 'G06N10/00', available: false },
   { id: 'kvantealgoritmer', label: 'Kvantealgoritmer', class: 'G06N10/20', available: true },
   { id: 'quantum-sensors', label: 'Quantum Sensors', class: 'G01N', available: false },
@@ -20,7 +60,7 @@ const quantumCategories = [
 ]
 
 // Analysis menu items for each category
-const analysisMenuItems = [
+const analysisMenuItems: AnalysisMenuItem[] = [
   { id: 'geographic', label: 'Geographic Analysis', icon: '📍' },
   { id: 'entity', label: 'Entity Analysis', icon: '👥' },
   { id: 'timeline', label: 'Timeline Analysis', icon: '📈' },
@@ -28,15 +68,30 @@ const analysisMenuItems = [
   { id: 'norway', label: 'Norway Analysis', icon: '🇳🇴' },
 ]
 
-type QuantumCategory = typeof quantumCategories[0]
-type AnalysisMenuItem = typeof analysisMenuItems[0]
-
 export default function Home() {
-  const [currentCategory, setCurrentCategory] = useState<string>('kvantealgoritmer')
-  const [currentAnalysis, setCurrentAnalysis] = useState<string>('geographic')
+  const [currentCategory, setCurrentCategory] = useState<string>(DEFAULT_CATEGORY)
+  const [currentAnalysis, setCurrentAnalysis] = useState<string>(DEFAULT_ANALYSIS)
 
   // Get current category info
   const activeCategoryInfo = quantumCategories.find(cat => cat.id === currentCategory)
+
+  // Helper for category button classes
+  const getCategoryButtonClass = (category: QuantumCategory, isSelected: boolean) => {
+    const baseClasses = "px-4 py-2 rounded-lg font-medium text-sm whitespace-nowrap transition-all flex flex-col items-start"
+
+    if (isSelected) {
+      if (category.id === 'kvantealgoritmer') {
+        return `${baseClasses} bg-green-100 text-green-900 shadow-md border border-green-200`
+      }
+      return `${baseClasses} bg-blue-600 text-white shadow-md`
+    }
+
+    if (category.available) {
+      return `${baseClasses} bg-gray-100 text-gray-700 hover:bg-green-50`
+    }
+
+    return `${baseClasses} bg-gray-50 text-gray-400 cursor-not-allowed opacity-60`
+  }
 
   const renderContent = () => {
     // Only render content for available categories
@@ -58,61 +113,53 @@ export default function Home() {
       )
     }
 
-    // Render analysis content for Kvantealgoritmer
-    if (currentAnalysis === 'geographic') {
-      return (
-        <div className="fade-in">
-          <GeographicAnalysis />
-        </div>
-      )
-    }
-
-    if (currentAnalysis === 'entity') {
-      return (
-        <div className="fade-in">
-          <EntityAnalysis />
-        </div>
-      )
-    }
-
-    if (currentAnalysis === 'timeline') {
-      return (
-        <div className="fade-in">
-          <TimelineAnalysis />
-        </div>
-      )
-    }
-
-    if (currentAnalysis === 'classification') {
-      return (
-        <div className="fade-in">
-          <ClassificationAnalysis />
-        </div>
-      )
-    }
-
-    // Coming soon pages
-    const contentMap: { [key: string]: JSX.Element } = {
-      norway: (
-        <div className="fade-in">
-          <div className="card">
-            <h2 className="card-header">🇳🇴 Norway Analysis</h2>
-            <p className="text-gray-600 mb-6">Deep dive into Norwegian patent filings</p>
-            <div className="info-box-warning">
-              <p className="text-orange-900 font-medium">Norway analysis coming soon...</p>
+    // Render analysis content
+    switch (currentAnalysis) {
+      case 'geographic':
+        return (
+          <div className="fade-in">
+            <GeographicAnalysis />
+          </div>
+        )
+      case 'entity':
+        return (
+          <div className="fade-in">
+            <EntityAnalysis />
+          </div>
+        )
+      case 'timeline':
+        return (
+          <div className="fade-in">
+            <TimelineAnalysis />
+          </div>
+        )
+      case 'classification':
+        return (
+          <div className="fade-in">
+            <ClassificationAnalysis />
+          </div>
+        )
+      case 'norway':
+        return (
+          <div className="fade-in">
+            <div className="card">
+              <h2 className="card-header">🇳🇴 Norway Analysis</h2>
+              <p className="text-gray-600 mb-6">Deep dive into Norwegian patent filings</p>
+              <div className="info-box-warning">
+                <p className="text-orange-900 font-medium">Norway analysis coming soon...</p>
+              </div>
             </div>
           </div>
-        </div>
-      ),
+        )
+      default:
+        return (
+          <div className="card">
+            <div className="info-box-warning">
+              <p className="text-orange-900 font-medium">Page not found</p>
+            </div>
+          </div>
+        )
     }
-
-    return contentMap[currentAnalysis] || (
-      <div className="card">
-        <div className="info-box-warning">
-          <p className="text-orange-900 font-medium">Page not found</p>
-        </div>
-      </div>
-    )
   }
 
   return (
@@ -130,34 +177,26 @@ export default function Home() {
           </div>
 
           {/* Horizontal Category Menu */}
-          <nav className="flex space-x-2 overflow-x-auto">
-            {quantumCategories.map((category: QuantumCategory) => (
-              <button
-                key={category.id}
-                onClick={() => {
-                  setCurrentCategory(category.id)
-                  setCurrentAnalysis('geographic') // Reset to first analysis item
-                }}
-                className={`
-                  px-4 py-2 rounded-lg font-medium text-sm whitespace-nowrap transition-all
-                  ${currentCategory === category.id
-                    ? category.id === 'kvantealgoritmer'
-                      ? 'bg-green-100 text-green-900 shadow-md border border-green-200'
-                      : 'bg-blue-600 text-white shadow-md'
-                    : category.available
-                      ? 'bg-gray-100 text-gray-700 hover:bg-green-50'
-                      : 'bg-gray-50 text-gray-400 cursor-not-allowed'
-                  }
-                  ${!category.available && currentCategory !== category.id ? 'opacity-60' : ''}
-                `}
-                disabled={!category.available && currentCategory !== category.id}
-              >
-                <div className="flex flex-col items-start">
+          <nav className="flex space-x-2 overflow-x-auto" aria-label="Quantum Categories">
+            {quantumCategories.map((category) => {
+              const isSelected = currentCategory === category.id
+              return (
+                <button
+                  key={category.id}
+                  onClick={() => {
+                    setCurrentCategory(category.id)
+                    setCurrentAnalysis(DEFAULT_ANALYSIS)
+                  }}
+                  className={getCategoryButtonClass(category, isSelected)}
+                  disabled={!category.available}
+                  aria-current={isSelected ? 'page' : undefined}
+                  aria-label={`Select category: ${category.label}`}
+                >
                   <span>{category.label}</span>
                   <span className="text-xs opacity-75">{category.class}</span>
-                </div>
-              </button>
-            ))}
+                </button>
+              )
+            })}
           </nav>
         </div>
       </div>
@@ -177,26 +216,32 @@ export default function Home() {
             </div>
           </div>
 
-          <nav className="flex-1 overflow-y-auto p-4 space-y-2">
+          <nav className="flex-1 overflow-y-auto p-4 space-y-2" aria-label="Analysis Modules">
             <h2 className="text-xs font-semibold text-gray-500 uppercase px-3 mb-4 tracking-wider">
               Analysis Modules
             </h2>
 
-            {analysisMenuItems.map((item: AnalysisMenuItem) => (
-              <button
-                key={item.id}
-                onClick={() => setCurrentAnalysis(item.id)}
-                disabled={!activeCategoryInfo?.available}
-                className={`
-                  sidebar-nav-item w-full text-left
-                  ${currentAnalysis === item.id ? 'active' : ''}
-                  ${!activeCategoryInfo?.available ? 'opacity-50 cursor-not-allowed' : ''}
-                `}
-              >
-                <span className="text-xl">{item.icon}</span>
-                <span className="flex-1">{item.label}</span>
-              </button>
-            ))}
+            {analysisMenuItems.map((item) => {
+              const isAvailable = activeCategoryInfo?.available
+              const isActive = currentAnalysis === item.id
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => setCurrentAnalysis(item.id)}
+                  disabled={!isAvailable}
+                  className={`
+                    sidebar-nav-item w-full text-left
+                    ${isActive ? 'active' : ''}
+                    ${!isAvailable ? 'opacity-50 cursor-not-allowed' : ''}
+                  `}
+                  aria-current={isActive ? 'page' : undefined}
+                  aria-disabled={!isAvailable}
+                >
+                  <span className="text-xl" aria-hidden="true">{item.icon}</span>
+                  <span className="flex-1">{item.label}</span>
+                </button>
+              )
+            })}
           </nav>
 
           <div className="p-4 border-t border-gray-200 bg-gray-50">
@@ -208,7 +253,7 @@ export default function Home() {
         </div>
 
         {/* Main Content */}
-        <main className="flex-1 flex flex-col overflow-hidden">
+        <main className="flex-1 flex flex-col overflow-hidden" role="main">
           {/* Content Area */}
           <div className="flex-1 overflow-auto bg-gray-50">
             <div className="p-8 max-w-[1600px] mx-auto">{renderContent()}</div>

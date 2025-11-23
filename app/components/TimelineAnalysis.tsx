@@ -4,20 +4,71 @@ import React, { useEffect, useState, useMemo } from 'react'
 import dynamic from 'next/dynamic'
 
 // Dynamically import Plot with no SSR to prevent hydration errors
+// Note: 'as any' is required due to plotly-react type limitations
 const Plot = dynamic(async () => {
     const plotly = await import('plotly.js-dist-min')
     const createPlotlyComponent = (await import('react-plotly.js/factory')).default
     return createPlotlyComponent(plotly.default)
 }, { ssr: false }) as any
 
-interface TimelineData {
-    timelineData: any[]
-    years: string[]
-    ownerKey: string
+// Constants
+const TOP_OWNERS_CHART_LIMIT = 8
+const BUBBLE_SIZE_MULTIPLIER = 8
+const MIN_BUBBLE_SIZE = 8
+
+// Interfaces
+interface LongFormatData {
+    owner: string
+    year: number
+    count: number
+}
+
+interface YearTotal {
+    year: number
+    total: number
+}
+
+interface OwnerTotal {
+    owner: string
+    total: number
+}
+
+interface SummaryStats {
+    totalPatents: number
+    uniqueOwners: number
+    dateRange: string
+    peakYear: string
+    peakCount: number
+}
+
+interface ProcessedTimelineData {
+    rawData: {
+        data: any[]
+        years: string[]
+        ownerKey: string
+        displayData: any[]
+    }
+    longFormatData: LongFormatData[]
+    yearTotals: YearTotal[]
+    topOwners: OwnerTotal[]
+    summaryStats: SummaryStats
+}
+
+interface TimelineResponse {
+    success: boolean
+    data?: ProcessedTimelineData
+    error?: string
+}
+
+// Helper function to truncate owner names
+function truncateOwnerName(name: string): string {
+    const words = name.split(' ')
+    if (words.length <= 2) return name
+    return words.slice(0, 2).join(' ') + '...'
 }
 
 export default function TimelineAnalysis() {
-    const [timelineData, setTimelineData] = useState<TimelineData | null>(null)
+    const [timelineData, setTimelineData] = useState<ProcessedTimelineData | null>(null)
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
     const [mounted, setMounted] = useState(false)
@@ -34,11 +85,9 @@ export default function TimelineAnalysis() {
             try {
                 setLoading(true)
                 const response = await fetch('/api/timeline')
-                const result = await response.json()
+                const result: TimelineResponse = await response.json()
 
-                console.log('Timeline API Response:', result)
-
-                if (result.success) {
+                if (result.success && result.data) {
                     setTimelineData(result.data)
                 } else {
                     setError(result.error || 'Failed to load timeline data')
@@ -54,107 +103,50 @@ export default function TimelineAnalysis() {
         fetchData()
     }, [mounted])
 
-    // Convert pivot table to long format
-    const longData = useMemo(() => {
-        if (!timelineData) return []
-
-        const data: Array<{ owner: string; year: number; count: number }> = []
-
-        timelineData.timelineData.forEach((row) => {
-            const owner = row[timelineData.ownerKey]
-
-            // Skip if owner is empty or None
-            if (!owner || owner === '' || owner.toLowerCase() === 'none') {
-                return
-            }
-
-            timelineData.years.forEach((yearStr) => {
-                const rawValue = row[yearStr]
-                const count = parseInt(rawValue || '0')
-                const year = parseInt(yearStr)
-
-                if (count > 0 && year >= 2000 && year <= 2025) {
-                    data.push({
-                        owner: owner.replace(/"/g, '').trim(),
-                        year,
-                        count,
-                    })
-                }
-            })
-        })
-
-        console.log('Long format data points:', data.length)
-        return data
-    }, [timelineData])
-
-    // Helper to truncate company names to 2 words
-    const truncateName = (name: string) => {
-        const words = name.split(' ')
-        if (words.length <= 2) return name
-        return words.slice(0, 2).join(' ') + '...'
-    }
-
-    // 1. Overall timeline - total patents per year
+    // 1. Overall timeline chart data
     const overallTimelineData = useMemo(() => {
-        if (longData.length === 0) return []
-
-        const yearTotals = new Map<number, number>()
-
-        longData.forEach((item) => {
-            const current = yearTotals.get(item.year) || 0
-            yearTotals.set(item.year, current + item.count)
-        })
-
-        const sortedYears = Array.from(yearTotals.entries()).sort((a, b) => a[0] - b[0])
+        if (!timelineData) return []
 
         return [
             {
                 type: 'scatter' as const,
                 mode: 'lines+markers' as const,
-                x: sortedYears.map(([year]) => year),
-                y: sortedYears.map(([, count]) => count),
+                x: timelineData.yearTotals.map(yt => yt.year),
+                y: timelineData.yearTotals.map(yt => yt.total),
                 line: { color: '#10b981', width: 3 },
                 marker: { size: 8, color: '#10b981' },
                 name: 'Total Applications',
             },
         ]
-    }, [longData])
+    }, [timelineData])
 
-    // 2. Timeline by top 8 owners - Bubble chart with years on X-axis and owners on Y-axis
+    // 2. Top owners bubble chart data
     const topOwnersTimelineData = useMemo(() => {
-        if (longData.length === 0) return []
+        if (!timelineData) return []
 
-        const ownerTotals = new Map<string, number>()
-        longData.forEach((item) => {
-            const current = ownerTotals.get(item.owner) || 0
-            ownerTotals.set(item.owner, current + item.count)
-        })
+        const topOwnerNames = timelineData.topOwners.map(o => o.owner)
+        const topOwnersData = timelineData.longFormatData.filter(d =>
+            topOwnerNames.includes(d.owner)
+        )
 
-        // Sort owners by total count (descending) so top owner is at the top of the chart
-        const topOwners = Array.from(ownerTotals.entries())
-            .sort((a, b) => a[1] - b[1])
-            .slice(-8) // Take last 8 (which are the top 8)
-            .map(([owner]) => owner)
-
-        console.log('Top 8 owners:', topOwners)
-
-        // Create a single trace with all data points
         const xData: number[] = []
-        const yData: string[] = [] // Use string for categorical axis
+        const yData: string[] = []
         const sizeData: number[] = []
         const colorData: number[] = []
         const hoverText: string[] = []
 
-        topOwners.forEach((owner) => {
-            const ownerData = longData
-                .filter((item) => item.owner === owner)
+        // Sort owners by total (ascending) so top owner appears at top of chart
+        const sortedOwners = [...timelineData.topOwners].sort((a, b) => a.total - b.total)
+
+        sortedOwners.forEach(({ owner }) => {
+            const ownerData = topOwnersData
+                .filter(d => d.owner === owner)
                 .sort((a, b) => a.year - b.year)
 
-            ownerData.forEach((d) => {
+            ownerData.forEach(d => {
                 xData.push(d.year)
-                yData.push(truncateName(owner)) // Truncate name for Y-axis
-                // Scale bubble size: min size 8, then proportional to sqrt of count
-                sizeData.push(Math.max(8, Math.sqrt(d.count) * 8))
+                yData.push(truncateOwnerName(owner))
+                sizeData.push(Math.max(MIN_BUBBLE_SIZE, Math.sqrt(d.count) * BUBBLE_SIZE_MULTIPLIER))
                 colorData.push(d.count)
                 hoverText.push(`<b>${owner}</b><br>Year: ${d.year}<br>Patents: ${d.count}`)
             })
@@ -169,7 +161,7 @@ export default function TimelineAnalysis() {
                 marker: {
                     size: sizeData,
                     color: colorData,
-                    colorscale: 'Viridis', // More distinct colors
+                    colorscale: 'Viridis',
                     showscale: true,
                     colorbar: {
                         title: 'Patents',
@@ -184,36 +176,30 @@ export default function TimelineAnalysis() {
                 showlegend: false,
             }
         ]
-    }, [longData])
+    }, [timelineData])
 
-    // 3. Prepare heatmap data
+    // 3. Heatmap data
     const heatmapData = useMemo(() => {
-        if (longData.length === 0) return null
+        if (!timelineData) return null
 
-        const ownerTotals = new Map<string, number>()
-        longData.forEach((item) => {
-            const current = ownerTotals.get(item.owner) || 0
-            ownerTotals.set(item.owner, current + item.count)
-        })
-
-        const topOwners = Array.from(ownerTotals.entries())
-            .sort((a, b) => b[1] - a[1])
-            .slice(0, 8)
-            .map(([owner]) => owner)
-
-        const allYears = Array.from(new Set(longData.map((d) => d.year))).sort((a, b) => a - b)
+        const topOwnerNames = timelineData.topOwners.map(o => o.owner)
+        const allYears = Array.from(
+            new Set(timelineData.longFormatData.map(d => d.year))
+        ).sort((a, b) => a - b)
 
         const matrix: number[][] = []
         const yLabels: string[] = []
 
-        topOwners.forEach((owner) => {
+        topOwnerNames.forEach(owner => {
             const row: number[] = []
-            allYears.forEach((year) => {
-                const item = longData.find((d) => d.owner === owner && d.year === year)
+            allYears.forEach(year => {
+                const item = timelineData.longFormatData.find(
+                    d => d.owner === owner && d.year === year
+                )
                 row.push(item ? item.count : 0)
             })
             matrix.push(row)
-            yLabels.push(truncateName(owner)) // Truncate name for heatmap Y-axis
+            yLabels.push(truncateOwnerName(owner))
         })
 
         return {
@@ -221,26 +207,15 @@ export default function TimelineAnalysis() {
             x: allYears,
             y: yLabels,
             type: 'heatmap' as const,
-            colorscale: [[0, '#ffffff'], [1, '#0c4a6e']],
+            colorscale: [
+                [0, '#ffffff'],
+                [1, '#0c4a6e']
+            ],
             hoverongaps: false,
         }
-    }, [longData])
-
-    // Prepare display table (first 10 rows, cleaned)
-    const displayData = useMemo(() => {
-        if (!timelineData) return []
-        return timelineData.timelineData.slice(0, 10).map((row) => {
-            const cleanRow: any = {}
-            Object.keys(row).forEach((key) => {
-                const value = row[key]
-                cleanRow[key] =
-                    value === null || value === 'None' || value === 'none' || value === '' ? '—' : value
-            })
-            return cleanRow
-        })
     }, [timelineData])
 
-    // Memoize layouts and configs
+    // Chart layouts (memoized)
     const overallLayout = useMemo(() => ({
         title: 'Total Patent Applications by Year (All Current Owners)',
         xaxis: { title: 'Year' },
@@ -256,18 +231,18 @@ export default function TimelineAnalysis() {
             title: 'Year',
             tickmode: 'linear' as const,
             dtick: 1,
-            side: 'bottom' as const, // Standard position
+            side: 'bottom' as const,
         },
         yaxis: {
             title: 'Current Owner',
-            automargin: true, // Automatically adjust margin for long names
+            automargin: true,
             side: 'left' as const,
         },
         autosize: true,
         height: 600,
         plot_bgcolor: '#f9fafb',
         paper_bgcolor: '#ffffff',
-        margin: { t: 80, b: 80, r: 20, l: 150 }, // Minimized margins, fixed left for names
+        margin: { t: 80, b: 80, r: 20, l: 150 },
     }), [])
 
     const heatmapLayout = useMemo(() => ({
@@ -311,33 +286,79 @@ export default function TimelineAnalysis() {
 
     if (error || !timelineData) {
         return (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-8">
-                <h3 className="text-lg font-semibold text-red-700 mb-2">⚠️ Error Loading Data</h3>
+            <div className="card border-l-4 border-red-500 bg-red-50">
+                <h3 className="text-xl font-bold text-red-700 mb-2">⚠️ Error Loading Data</h3>
                 <p className="text-red-600">{error || 'No data available'}</p>
+                {process.env.NODE_ENV === 'development' && (
+                    <div className="mt-4 p-4 bg-gray-100 rounded text-xs font-mono overflow-auto max-h-40">
+                        <p className="font-semibold mb-2">Debug Info:</p>
+                        <pre>{JSON.stringify({ error, hasData: !!timelineData }, null, 2)}</pre>
+                    </div>
+                )}
             </div>
         )
     }
 
     return (
         <div className="space-y-6">
-            <div className="bg-white rounded-lg shadow-lg p-8">
+            {/* Header */}
+            <div className="card">
                 <h1 className="text-3xl font-bold text-gray-900 mb-4 flex items-center gap-3">
                     <span className="text-4xl">📈</span>
                     Timeline Analysis - Current Owner
                 </h1>
 
-                <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
-                    <p className="text-green-900">
-                        <strong>Understanding Timeline Analysis:</strong> This section shows patent filing
-                        trends over time by current patent owners. Track how innovation activity has evolved
-                        and identify key periods of patent activity for different organizations.
+                <div className="info-box bg-green-50 border border-green-200 p-4 rounded-lg">
+                    <p className="text-green-900 font-medium mb-2">
+                        Understanding Timeline Analysis:
+                    </p>
+                    <p className="text-green-800 text-sm">
+                        This section shows patent filing trends over time by current patent owners.
+                        Track how innovation activity has evolved and identify key periods of patent
+                        activity for different organizations.
                     </p>
                 </div>
             </div>
 
-            {/* Retrieved Data Table */}
-            <div className="bg-white rounded-lg shadow-lg p-8">
-                <h2 className="text-2xl font-bold text-gray-900 mb-4">Retrieved Data for Timeline Analysis</h2>
+            {/* Summary Stats */}
+            <div className="card">
+                <h2 className="text-2xl font-bold text-gray-900 mb-6">Data Summary</h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                    <div className="bg-blue-50 rounded-lg p-4 border border-blue-100">
+                        <p className="text-sm text-blue-600 font-medium uppercase">Total Patents</p>
+                        <p className="text-2xl font-bold text-blue-900">
+                            {timelineData.summaryStats.totalPatents.toLocaleString()}
+                        </p>
+                    </div>
+                    <div className="bg-purple-50 rounded-lg p-4 border border-purple-100">
+                        <p className="text-sm text-purple-600 font-medium uppercase">Active Owners</p>
+                        <p className="text-2xl font-bold text-purple-900">
+                            {timelineData.summaryStats.uniqueOwners.toLocaleString()}
+                        </p>
+                    </div>
+                    <div className="bg-green-50 rounded-lg p-4 border border-green-100">
+                        <p className="text-sm text-green-600 font-medium uppercase">Date Range</p>
+                        <p className="text-2xl font-bold text-green-900">
+                            {timelineData.summaryStats.dateRange}
+                        </p>
+                    </div>
+                    <div className="bg-amber-50 rounded-lg p-4 border border-amber-100">
+                        <p className="text-sm text-amber-600 font-medium uppercase">Peak Activity</p>
+                        <p className="text-2xl font-bold text-amber-900">
+                            {timelineData.summaryStats.peakYear}
+                        </p>
+                        <p className="text-xs text-amber-700 mt-1">
+                            {timelineData.summaryStats.peakCount.toLocaleString()} patents
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            {/* Data Table */}
+            <div className="card">
+                <h2 className="text-2xl font-bold text-gray-900 mb-4">
+                    Sample Timeline Data (First 10 Owners)
+                </h2>
                 <div className="overflow-x-auto">
                     <table className="min-w-full divide-y divide-gray-200">
                         <thead className="bg-gray-50">
@@ -345,7 +366,7 @@ export default function TimelineAnalysis() {
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky left-0 bg-gray-50 z-10">
                                     Current Owner
                                 </th>
-                                {timelineData.years.map((year, idx) => (
+                                {timelineData.rawData.years.map((year, idx) => (
                                     <th
                                         key={idx}
                                         className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider"
@@ -356,12 +377,12 @@ export default function TimelineAnalysis() {
                             </tr>
                         </thead>
                         <tbody className="bg-white divide-y divide-gray-200">
-                            {displayData.map((row, rowIdx) => (
+                            {timelineData.rawData.displayData.map((row, rowIdx) => (
                                 <tr key={rowIdx}>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 text-left sticky left-0 bg-white z-10">
-                                        {row[timelineData.ownerKey] || ''}
+                                        {row[timelineData.rawData.ownerKey] || ''}
                                     </td>
-                                    {timelineData.years.map((year, colIdx) => (
+                                    {timelineData.rawData.years.map((year, colIdx) => (
                                         <td
                                             key={colIdx}
                                             className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center"
@@ -376,13 +397,14 @@ export default function TimelineAnalysis() {
                 </div>
             </div>
 
-            {/* 1. Overall Timeline */}
-            {overallTimelineData.length > 0 && overallTimelineData[0]?.x?.length > 0 && (
-                <div className="bg-white rounded-lg shadow-lg p-8">
-                    <h2 className="text-2xl font-bold text-gray-900 mb-2">Patent Applications Over Time</h2>
-                    <p className="text-gray-600 mb-6 italic">
-                        This chart shows the total number of patent applications across all current owners in
-                        the dataset by year.
+            {/* Overall Timeline Chart */}
+            {overallTimelineData.length > 0 && (
+                <div className="card">
+                    <h2 className="text-2xl font-bold text-gray-900 mb-2">
+                        Patent Applications Over Time
+                    </h2>
+                    <p className="text-gray-600 mb-6 text-sm italic">
+                        Total number of patent applications across all current owners by year
                     </p>
 
                     <div className="w-full h-96">
@@ -395,11 +417,15 @@ export default function TimelineAnalysis() {
                 </div>
             )}
 
-            {/* 2. Timeline by Top Owners */}
+            {/* Top Owners Bubble Chart */}
             {topOwnersTimelineData.length > 0 && (
-                <div className="bg-white rounded-lg shadow-lg p-8">
-                    <h2 className="text-2xl font-bold text-gray-900 mb-2">Timeline by Top Current Owners</h2>
-                    <p className="text-gray-600 mb-6 italic">Bubble size and color represents patent count</p>
+                <div className="card">
+                    <h2 className="text-2xl font-bold text-gray-900 mb-2">
+                        Timeline by Top {TOP_OWNERS_CHART_LIMIT} Current Owners
+                    </h2>
+                    <p className="text-gray-600 mb-6 text-sm italic">
+                        Bubble size and color represents patent count
+                    </p>
 
                     <div className="w-full h-screen">
                         <Plot
@@ -413,10 +439,15 @@ export default function TimelineAnalysis() {
                 </div>
             )}
 
-            {/* 3. Heatmap */}
+            {/* Heatmap */}
             {heatmapData && heatmapData.z.length > 0 && (
-                <div className="bg-white rounded-lg shadow-lg p-8">
-                    <h2 className="text-2xl font-bold text-gray-900 mb-2">Patent Activity Heatmap</h2>
+                <div className="card">
+                    <h2 className="text-2xl font-bold text-gray-900 mb-2">
+                        Patent Activity Heatmap
+                    </h2>
+                    <p className="text-gray-600 mb-6 text-sm italic">
+                        Top {TOP_OWNERS_CHART_LIMIT} owners patent activity intensity over time
+                    </p>
 
                     <div className="w-full h-80 max-w-2xl mx-auto">
                         <Plot
@@ -429,12 +460,12 @@ export default function TimelineAnalysis() {
             )}
 
             {/* About Section */}
-            <div className="bg-white rounded-lg shadow-lg p-8">
+            <div className="card">
                 <h2 className="text-2xl font-bold text-gray-900 mb-4">About This Patent Data</h2>
                 <p className="text-gray-700">
                     This timeline analysis shows patent application trends by current patent owners over
                     time. The data represents the innovation activity and patent filing strategies of
-                    different organizations.
+                    different organizations in the quantum computing technology space.
                 </p>
             </div>
         </div>

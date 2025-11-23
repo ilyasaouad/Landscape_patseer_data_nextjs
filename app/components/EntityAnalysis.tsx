@@ -9,17 +9,44 @@ const BarChart = dynamic(
     { ssr: false }
 )
 
-interface EntityData {
-    assigneeCount: any[]
-    assigneeCountry: any[]
-    inventorCount: any[]
-    inventorCountry: any[]
-    assigneeCountryProcessed: any[]
+// Constants
+const CHART_LIMIT = 20
+const TABLE_MAX_ROWS = 20
+
+// Interfaces
+interface AssigneeData {
+    country: string
+    assignee: string
+    count: number
+}
+
+interface InventorData {
+    country: string
+    inventor: string
+    count: number
+}
+
+interface ProcessedEntityData {
+    assigneeData: AssigneeData[]
+    inventorData: InventorData[]
+}
+
+interface EntityResponse {
+    success: boolean
+    data?: ProcessedEntityData
+    error?: string
+    fileInfo?: {
+        assigneeCountFile: string | null
+        assigneeCountryFile: string | null
+        inventorCountFile: string | null
+        inventorCountryFile: string | null
+        assigneeCountryProcessedFile: string | null
+    }
 }
 
 export default function EntityAnalysis() {
     const [activeTab, setActiveTab] = useState<'assignee' | 'inventor'>('assignee')
-    const [entityData, setEntityData] = useState<EntityData | null>(null)
+    const [entityData, setEntityData] = useState<ProcessedEntityData | null>(null)
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
 
@@ -28,9 +55,9 @@ export default function EntityAnalysis() {
             try {
                 setLoading(true)
                 const response = await fetch('/api/entity')
-                const result = await response.json()
+                const result: EntityResponse = await response.json()
 
-                if (result.success) {
+                if (result.success && result.data) {
                     setEntityData(result.data)
                 } else {
                     setError(result.error || 'Failed to load entity data')
@@ -66,43 +93,44 @@ export default function EntityAnalysis() {
         )
     }
 
-    // Prepare assignee data - CSV columns: Country, Assignee, Count
-    // Don't add country prefix since it's already in the Country column
-    const assigneeTableData = entityData.assigneeCountryProcessed?.map(item => ({
-        'Country': item.Country || item.country || '',
-        'Assignee': item.Assignee || item.assignee || 'Unknown',
-        'Patent Count': parseInt(item.Count || item.count || '0')
-    })).filter(item => item['Patent Count'] > 0) || []
+    // Prepare assignee data for display
+    const assigneeTableData = entityData.assigneeData.map(item => ({
+        'Country': item.country || 'Unknown',
+        'Assignee': item.assignee,
+        'Patent Count': item.count
+    }))
 
-    const assigneeChartData = assigneeTableData.slice(0, 20)
+    const assigneeChartData = assigneeTableData.slice(0, CHART_LIMIT)
+    const hasAssigneeData = assigneeTableData.length > 0
 
-    // Prepare inventor data - CSV columns: Inventor, Country
-    // Group by inventor and count occurrences
-    const inventorMap = new Map<string, { country: string, count: number }>()
+    // Prepare inventor data for display
+    const inventorTableData = entityData.inventorData.map(item => ({
+        'Country': item.country || 'Unknown',
+        'Inventor': item.inventor,
+        'Patent Count': item.count
+    }))
 
-    entityData.inventorCountry?.forEach(item => {
-        const inventor = item.Inventor || item.inventor || ''
-        const country = (item.Country || item.country || '').trim()
+    const inventorChartData = inventorTableData.slice(0, CHART_LIMIT)
+    const hasInventorData = inventorTableData.length > 0
 
-        if (inventor) {
-            if (inventorMap.has(inventor)) {
-                const existing = inventorMap.get(inventor)!
-                existing.count += 1
-            } else {
-                inventorMap.set(inventor, { country, count: 1 })
-            }
-        }
-    })
-
-    const inventorTableData = Array.from(inventorMap.entries())
-        .map(([name, data]) => ({
-            'Country': data.country,
-            'Inventor': name,
-            'Patent Count': data.count
-        }))
-        .sort((a, b) => b['Patent Count'] - a['Patent Count'])
-
-    const inventorChartData = inventorTableData.slice(0, 20)
+    // Empty state component
+    const EmptyState = ({ type }: { type: 'assignee' | 'inventor' }) => (
+        <div className="card border-2 border-dashed border-gray-300 bg-gray-50">
+            <div className="text-center py-12">
+                <span className="text-6xl mb-4 block opacity-50">
+                    {type === 'assignee' ? '🏢' : '👨‍🔬'}
+                </span>
+                <h3 className="text-xl font-semibold text-gray-700 mb-2">
+                    No {type === 'assignee' ? 'Assignee' : 'Inventor'} Data Available
+                </h3>
+                <p className="text-gray-500">
+                    {type === 'assignee'
+                        ? 'No assignee data found in the dataset.'
+                        : 'No inventor data found in the dataset.'}
+                </p>
+            </div>
+        </div>
+    )
 
     return (
         <div className="space-y-6">
@@ -112,11 +140,14 @@ export default function EntityAnalysis() {
                     Entity Analysis
                 </h1>
 
-                <div className="info-box mb-6">
-                    <p className="text-blue-900">
-                        <strong>Understanding Entity Analysis:</strong> This section analyzes patent assignees
-                        (organizations that own patents) and inventors (individuals who created the inventions).
-                        The data shows the most active entities in the quantum computing patent landscape.
+                <div className="info-box mb-6 bg-blue-50 border border-blue-200 p-4 rounded-lg">
+                    <p className="text-blue-900 font-medium mb-2">
+                        Understanding Entity Analysis:
+                    </p>
+                    <p className="text-blue-800 text-sm">
+                        This section analyzes patent <strong>assignees</strong> (organizations that own patents)
+                        and <strong>inventors</strong> (individuals who created the inventions). The data shows
+                        the most active entities in the quantum computing patent landscape.
                     </p>
                 </div>
 
@@ -124,14 +155,22 @@ export default function EntityAnalysis() {
                 <div className="flex gap-2 mb-6 border-b-2 border-gray-200">
                     <button
                         onClick={() => setActiveTab('assignee')}
-                        className={`tab-button ${activeTab === 'assignee' ? 'active' : ''}`}
+                        className={`px-6 py-3 font-medium text-sm transition-colors relative ${activeTab === 'assignee'
+                                ? 'text-blue-600 border-b-2 border-blue-600 -mb-0.5'
+                                : 'text-gray-500 hover:text-gray-700'
+                            }`}
+                        aria-current={activeTab === 'assignee' ? 'page' : undefined}
                     >
                         <span className="text-lg mr-2">🏢</span>
                         Assignees (Organizations)
                     </button>
                     <button
                         onClick={() => setActiveTab('inventor')}
-                        className={`tab-button ${activeTab === 'inventor' ? 'active' : ''}`}
+                        className={`px-6 py-3 font-medium text-sm transition-colors relative ${activeTab === 'inventor'
+                                ? 'text-blue-600 border-b-2 border-blue-600 -mb-0.5'
+                                : 'text-gray-500 hover:text-gray-700'
+                            }`}
+                        aria-current={activeTab === 'inventor' ? 'page' : undefined}
                     >
                         <span className="text-lg mr-2">👨‍🔬</span>
                         Inventors (Individuals)
@@ -142,68 +181,80 @@ export default function EntityAnalysis() {
             {/* Assignee Tab Content */}
             {activeTab === 'assignee' && (
                 <div className="space-y-8 fade-in">
-                    <div className="card">
-                        <h2 className="card-header">Assignee Country Distribution</h2>
+                    {hasAssigneeData ? (
+                        <div className="card">
+                            <h2 className="text-2xl font-bold text-gray-800 mb-6">
+                                Assignee Country Distribution
+                            </h2>
 
-                        {/* Assignee Table */}
-                        <div className="mb-8">
-                            <DataTable
-                                data={assigneeTableData}
-                                title="📊 All Assignees by Country"
-                                filename="Assignee_Country_Count_Updated.xlsx"
-                                maxRows={20}
-                            />
-                        </div>
+                            {/* Assignee Table */}
+                            <div className="mb-8">
+                                <DataTable
+                                    data={assigneeTableData}
+                                    title="📊 All Assignees by Country"
+                                    filename="Assignee_Country_Count.xlsx"
+                                    maxRows={TABLE_MAX_ROWS}
+                                />
+                            </div>
 
-                        {/* Assignee Bar Chart */}
-                        {assigneeChartData.length > 0 && (
+                            {/* Assignee Bar Chart */}
                             <div className="chart-container">
-                                <h3 className="chart-title">📊 Top 20 Assignees - Patent Portfolio</h3>
+                                <h3 className="text-xl font-semibold text-gray-800 mb-4">
+                                    📊 Top {CHART_LIMIT} Assignees - Patent Portfolio
+                                </h3>
                                 <BarChart
                                     data={assigneeChartData}
                                     xField="Assignee"
                                     yField="Patent Count"
                                     title="Top Patent Assignees by Country"
                                     orientation="horizontal"
-                                    limit={20}
+                                    limit={CHART_LIMIT}
                                 />
                             </div>
-                        )}
-                    </div>
+                        </div>
+                    ) : (
+                        <EmptyState type="assignee" />
+                    )}
                 </div>
             )}
 
             {/* Inventor Tab Content */}
             {activeTab === 'inventor' && (
                 <div className="space-y-8 fade-in">
-                    <div className="card">
-                        <h2 className="card-header">Inventor Country Distribution</h2>
+                    {hasInventorData ? (
+                        <div className="card">
+                            <h2 className="text-2xl font-bold text-gray-800 mb-6">
+                                Inventor Country Distribution
+                            </h2>
 
-                        {/* Inventor Table */}
-                        <div className="mb-8">
-                            <DataTable
-                                data={inventorTableData}
-                                title="📊 All Inventors by Country"
-                                filename="Inventor_Country_Count.xlsx"
-                                maxRows={20}
-                            />
-                        </div>
+                            {/* Inventor Table */}
+                            <div className="mb-8">
+                                <DataTable
+                                    data={inventorTableData}
+                                    title="📊 All Inventors by Country"
+                                    filename="Inventor_Country_Count.xlsx"
+                                    maxRows={TABLE_MAX_ROWS}
+                                />
+                            </div>
 
-                        {/* Inventor Bar Chart */}
-                        {inventorChartData.length > 0 && (
+                            {/* Inventor Bar Chart */}
                             <div className="chart-container">
-                                <h3 className="chart-title">📊 Top 20 Inventors - Patent Portfolio</h3>
+                                <h3 className="text-xl font-semibold text-gray-800 mb-4">
+                                    📊 Top {CHART_LIMIT} Inventors - Patent Portfolio
+                                </h3>
                                 <BarChart
                                     data={inventorChartData}
                                     xField="Inventor"
                                     yField="Patent Count"
                                     title="Top Patent Inventors by Country"
                                     orientation="horizontal"
-                                    limit={20}
+                                    limit={CHART_LIMIT}
                                 />
                             </div>
-                        )}
-                    </div>
+                        </div>
+                    ) : (
+                        <EmptyState type="inventor" />
+                    )}
                 </div>
             )}
         </div>

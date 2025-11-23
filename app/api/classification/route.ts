@@ -1,16 +1,8 @@
 // app/api/classification/route.ts
-export const runtime = "nodejs";
-
-
 import { NextRequest, NextResponse } from 'next/server'
 import fs from 'fs'
 import path from 'path'
 import { parse } from 'csv-parse/sync'
-import pino from 'pino'
-
-
-
-const logger = pino()
 
 interface ClassificationData {
     ipcFull: any[]
@@ -33,14 +25,14 @@ function findCsvFile(filename: string, alternates: string[] = [], dir: string = 
 
     // Check if directory exists
     if (!fs.existsSync(baseDir)) {
-        logger.warn(`Directory does not exist: ${baseDir}`)
+        console.warn(`Directory does not exist: ${baseDir}`)
         return null
     }
 
     // Try main filename
     let fullPath = path.join(baseDir, filename)
     if (fs.existsSync(fullPath)) {
-        logger.info(`Found file: ${fullPath}`)
+        console.log(`Found file: ${fullPath}`)
         return fullPath
     }
 
@@ -48,18 +40,18 @@ function findCsvFile(filename: string, alternates: string[] = [], dir: string = 
     for (const altName of alternates) {
         fullPath = path.join(baseDir, altName)
         if (fs.existsSync(fullPath)) {
-            logger.info(`Found alternate file: ${fullPath}`)
+            console.log(`Found alternate file: ${fullPath}`)
             return fullPath
         }
     }
 
-    logger.warn(`File not found: ${filename} (tried ${alternates.length} alternates)`)
+    console.warn(`File not found: ${filename} (tried ${alternates.length} alternates)`)
     return null
 }
 
 async function loadCsvData(filename: string): Promise<any[]> {
     try {
-        logger.info(`Loading CSV: ${filename}`)
+        console.log(`Loading CSV: ${filename}`)
         const fileContent = fs.readFileSync(filename, 'utf-8')
 
         const records = parse(fileContent, {
@@ -71,10 +63,10 @@ async function loadCsvData(filename: string): Promise<any[]> {
             cast: false,
         })
 
-        logger.info(`Loaded ${records.length} records from ${filename}`)
+        console.log(`Loaded ${records.length} records from ${filename}`)
         return records
     } catch (error) {
-        logger.error(`Error loading CSV ${filename}:`, error)
+        console.error(`Error loading CSV ${filename}:`, error)
         throw error
     }
 }
@@ -110,7 +102,7 @@ async function getClassificationData(): Promise<ClassificationResponse> {
     }
 
     try {
-        logger.info('=== Classification Data Processing Started ===')
+        console.log('=== Classification Data Processing Started ===')
 
         const data: ClassificationData = {
             ipcFull: [],
@@ -129,9 +121,8 @@ async function getClassificationData(): Promise<ClassificationResponse> {
             debugInfo.filesFound.push('IPC_Full.csv')
             try {
                 const ipcRecords = await loadCsvData(ipcFullFile)
-                logger.info(`IPC Full raw records: ${ipcRecords.length}`)
+                console.log(`IPC Full raw records: ${ipcRecords.length}`)
 
-                // Process first 10 records
                 data.ipcFull = ipcRecords.slice(0, 10).map((row: any) => {
                     const keys = Object.keys(row)
                     const classification = cleanClassificationName(row[keys[0]] || '')
@@ -143,9 +134,9 @@ async function getClassificationData(): Promise<ClassificationResponse> {
                     }
                 }).filter(item => item.classification && item.total > 0)
 
-                logger.info(`✓ Processed ${data.ipcFull.length} IPC full records`)
+                console.log(`✓ Processed ${data.ipcFull.length} IPC full records`)
             } catch (err) {
-                logger.error('Error processing IPC_Full.csv:', err)
+                console.error('Error processing IPC_Full.csv:', err)
                 debugInfo.errors = debugInfo.errors || []
                 debugInfo.errors.push(`IPC_Full.csv: ${err}`)
             }
@@ -161,7 +152,7 @@ async function getClassificationData(): Promise<ClassificationResponse> {
             debugInfo.filesFound.push('CPC_Full.csv')
             try {
                 const cpcRecords = await loadCsvData(cpcFullFile)
-                logger.info(`CPC Full raw records: ${cpcRecords.length}`)
+                console.log(`CPC Full raw records: ${cpcRecords.length}`)
 
                 data.cpcFull = cpcRecords.slice(0, 10).map((row: any) => {
                     const keys = Object.keys(row)
@@ -174,9 +165,9 @@ async function getClassificationData(): Promise<ClassificationResponse> {
                     }
                 }).filter(item => item.classification && item.total > 0)
 
-                logger.info(`✓ Processed ${data.cpcFull.length} CPC full records`)
+                console.log(`✓ Processed ${data.cpcFull.length} CPC full records`)
             } catch (err) {
-                logger.error('Error processing CPC_Full.csv:', err)
+                console.error('Error processing CPC_Full.csv:', err)
                 debugInfo.errors = debugInfo.errors || []
                 debugInfo.errors.push(`CPC_Full.csv: ${err}`)
             }
@@ -196,9 +187,8 @@ async function getClassificationData(): Promise<ClassificationResponse> {
             debugInfo.filesFound.push('Current-Owner_IPC-Full.csv')
             try {
                 const ipcOwnerRecords = await loadCsvData(ipcOwnerFile)
-                logger.info(`IPC Owner raw records: ${ipcOwnerRecords.length}`)
+                console.log(`IPC Owner raw records: ${ipcOwnerRecords.length}`)
 
-                // Skip first row if it's a header/separator
                 const validRecords = ipcOwnerRecords.filter((row: any) => {
                     const firstValue = Object.values(row)[0]
                     return firstValue && !String(firstValue).includes('---') && !String(firstValue).includes('Current Owner')
@@ -207,7 +197,6 @@ async function getClassificationData(): Promise<ClassificationResponse> {
                 if (validRecords.length > 0) {
                     const keys = Object.keys(validRecords[0])
 
-                    // Calculate totals for each classification column (skip owner and total columns)
                     const classificationTotals: { [key: string]: number } = {}
                     for (let i = 2; i < keys.length; i++) {
                         const classKey = keys[i]
@@ -218,22 +207,19 @@ async function getClassificationData(): Promise<ClassificationResponse> {
                         classificationTotals[classKey] = total
                     }
 
-                    // Get top 5 classifications by total
                     const top5Classifications = Object.entries(classificationTotals)
                         .sort((a, b) => b[1] - a[1])
                         .slice(0, 5)
                         .map(([key]) => key)
 
-                    logger.info(`Top 5 IPC classifications: ${top5Classifications.map(k => cleanClassificationName(k)).join(', ')}`)
+                    console.log(`Top 5 IPC classifications: ${top5Classifications.map(k => cleanClassificationName(k)).join(', ')}`)
 
-                    // Map records with only top 5 classifications
                     data.ipcByOwner = validRecords.slice(0, 15).map((row: any) => {
                         const cleaned: any = {
                             currentOwner: cleanOwnerName(row[keys[0]] || ''),
                             total: parseNumber(row[keys[1]] || 0),
                         }
 
-                        // Add only top 5 classification columns
                         top5Classifications.forEach((classKey) => {
                             const cleanKey = cleanClassificationName(classKey)
                             if (cleanKey) {
@@ -244,10 +230,10 @@ async function getClassificationData(): Promise<ClassificationResponse> {
                         return cleaned
                     }).filter((item: any) => item.currentOwner && item.total > 0)
 
-                    logger.info(`✓ Processed ${data.ipcByOwner.length} IPC by owner records`)
+                    console.log(`✓ Processed ${data.ipcByOwner.length} IPC by owner records`)
                 }
             } catch (err) {
-                logger.error('Error processing Current-Owner_IPC-Full.csv:', err)
+                console.error('Error processing Current-Owner_IPC-Full.csv:', err)
                 debugInfo.errors = debugInfo.errors || []
                 debugInfo.errors.push(`Current-Owner_IPC-Full.csv: ${err}`)
             }
@@ -267,25 +253,23 @@ async function getClassificationData(): Promise<ClassificationResponse> {
             debugInfo.filesFound.push('Current-Owner_CPC-Full.csv')
             try {
                 const cpcOwnerRecords = await loadCsvData(cpcOwnerFile)
-                logger.info(`CPC Owner raw records: ${cpcOwnerRecords.length}`)
+                console.log(`CPC Owner raw records: ${cpcOwnerRecords.length}`)
 
                 if (cpcOwnerRecords.length > 0) {
-                    logger.info(`First CPC record keys: ${Object.keys(cpcOwnerRecords[0]).join(', ')}`)
-                    logger.info(`First CPC record values: ${Object.values(cpcOwnerRecords[0]).slice(0, 3).join(', ')}`)
+                    console.log(`First CPC record keys: ${Object.keys(cpcOwnerRecords[0]).join(', ')}`)
+                    console.log(`First CPC record values: ${Object.values(cpcOwnerRecords[0]).slice(0, 3).join(', ')}`)
                 }
 
-                // Skip first row if it's a header/separator
                 const validRecords = cpcOwnerRecords.filter((row: any) => {
                     const firstValue = Object.values(row)[0]
                     return firstValue && !String(firstValue).includes('---') && !String(firstValue).includes('Current Owner')
                 })
 
-                logger.info(`CPC Owner valid records after filtering: ${validRecords.length}`)
+                console.log(`CPC Owner valid records after filtering: ${validRecords.length}`)
 
                 if (validRecords.length > 0) {
                     const keys = Object.keys(validRecords[0])
 
-                    // Calculate totals for each classification column (skip owner and total columns)
                     const classificationTotals: { [key: string]: number } = {}
                     for (let i = 2; i < keys.length; i++) {
                         const classKey = keys[i]
@@ -296,22 +280,19 @@ async function getClassificationData(): Promise<ClassificationResponse> {
                         classificationTotals[classKey] = total
                     }
 
-                    // Get top 5 classifications by total
                     const top5Classifications = Object.entries(classificationTotals)
                         .sort((a, b) => b[1] - a[1])
                         .slice(0, 5)
                         .map(([key]) => key)
 
-                    logger.info(`Top 5 CPC classifications: ${top5Classifications.map(k => cleanClassificationName(k)).join(', ')}`)
+                    console.log(`Top 5 CPC classifications: ${top5Classifications.map(k => cleanClassificationName(k)).join(', ')}`)
 
-                    // Map records with only top 5 classifications
                     data.cpcByOwner = validRecords.slice(0, 15).map((row: any) => {
                         const cleaned: any = {
                             currentOwner: cleanOwnerName(row[keys[0]] || ''),
                             total: parseNumber(row[keys[1]] || 0),
                         }
 
-                        // Add only top 5 classification columns
                         top5Classifications.forEach((classKey) => {
                             const cleanKey = cleanClassificationName(classKey)
                             if (cleanKey) {
@@ -322,12 +303,12 @@ async function getClassificationData(): Promise<ClassificationResponse> {
                         return cleaned
                     }).filter((item: any) => item.currentOwner && item.total > 0)
 
-                    logger.info(`✓ Processed ${data.cpcByOwner.length} CPC by owner records`)
+                    console.log(`✓ Processed ${data.cpcByOwner.length} CPC by owner records`)
                 } else {
-                    logger.warn('No valid CPC owner records after filtering')
+                    console.warn('No valid CPC owner records after filtering')
                 }
             } catch (err) {
-                logger.error('Error processing Current-Owner_CPC-Full.csv:', err)
+                console.error('Error processing Current-Owner_CPC-Full.csv:', err)
                 debugInfo.errors = debugInfo.errors || []
                 debugInfo.errors.push(`Current-Owner_CPC-Full.csv: ${err}`)
             }
@@ -347,7 +328,7 @@ async function getClassificationData(): Promise<ClassificationResponse> {
             debugInfo.filesFound.push('CPC_Classifications_vs_Year.csv')
             try {
                 const cpcYearRecords = await loadCsvData(cpcYearFile)
-                logger.info(`CPC Year raw records: ${cpcYearRecords.length}`)
+                console.log(`CPC Year raw records: ${cpcYearRecords.length}`)
 
                 data.cpcByYear = cpcYearRecords
                     .map((row: any) => {
@@ -370,9 +351,9 @@ async function getClassificationData(): Promise<ClassificationResponse> {
                     .filter((item: any) => item !== null)
                     .sort((a: any, b: any) => a.year - b.year)
 
-                logger.info(`✓ Processed ${data.cpcByYear.length} CPC by year records`)
+                console.log(`✓ Processed ${data.cpcByYear.length} CPC by year records`)
             } catch (err) {
-                logger.error('Error processing CPC_Classifications_vs_Year.csv:', err)
+                console.error('Error processing CPC_Classifications_vs_Year.csv:', err)
                 debugInfo.errors = debugInfo.errors || []
                 debugInfo.errors.push(`CPC_Classifications_vs_Year.csv: ${err}`)
             }
@@ -392,7 +373,7 @@ async function getClassificationData(): Promise<ClassificationResponse> {
             debugInfo.filesFound.push('IPC_Classifications_vs_Year.csv')
             try {
                 const ipcYearRecords = await loadCsvData(ipcYearFile)
-                logger.info(`IPC Year raw records: ${ipcYearRecords.length}`)
+                console.log(`IPC Year raw records: ${ipcYearRecords.length}`)
 
                 data.ipcByYear = ipcYearRecords
                     .map((row: any) => {
@@ -415,9 +396,9 @@ async function getClassificationData(): Promise<ClassificationResponse> {
                     .filter((item: any) => item !== null)
                     .sort((a: any, b: any) => a.year - b.year)
 
-                logger.info(`✓ Processed ${data.ipcByYear.length} IPC by year records`)
+                console.log(`✓ Processed ${data.ipcByYear.length} IPC by year records`)
             } catch (err) {
-                logger.error('Error processing IPC_Classifications_vs_Year.csv:', err)
+                console.error('Error processing IPC_Classifications_vs_Year.csv:', err)
                 debugInfo.errors = debugInfo.errors || []
                 debugInfo.errors.push(`IPC_Classifications_vs_Year.csv: ${err}`)
             }
@@ -425,8 +406,8 @@ async function getClassificationData(): Promise<ClassificationResponse> {
             debugInfo.filesNotFound.push('IPC_Classifications_vs_Year.csv')
         }
 
-        logger.info('=== Classification Data Processing Completed ===')
-        logger.info(`Summary: IPC Full: ${data.ipcFull.length}, CPC Full: ${data.cpcFull.length}, IPC Owner: ${data.ipcByOwner.length}, CPC Owner: ${data.cpcByOwner.length}, IPC Year: ${data.ipcByYear.length}, CPC Year: ${data.cpcByYear.length}`)
+        console.log('=== Classification Data Processing Completed ===')
+        console.log(`Summary: IPC Full: ${data.ipcFull.length}, CPC Full: ${data.cpcFull.length}, IPC Owner: ${data.ipcByOwner.length}, CPC Owner: ${data.cpcByOwner.length}, IPC Year: ${data.ipcByYear.length}, CPC Year: ${data.cpcByYear.length}`)
 
         return {
             success: true,
@@ -434,7 +415,7 @@ async function getClassificationData(): Promise<ClassificationResponse> {
             debug: debugInfo,
         }
     } catch (error) {
-        logger.error('Error getting classification data:', error)
+        console.error('Error getting classification data:', error)
         return {
             success: false,
             error: error instanceof Error ? error.message : 'Unknown error',
@@ -447,7 +428,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     try {
         const result = await getClassificationData()
 
-        // Log summary for debugging
         if (result.success && result.data) {
             console.log('API Response Summary:', {
                 ipcFull: result.data.ipcFull.length,
@@ -461,7 +441,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
         return NextResponse.json(result)
     } catch (error) {
-        logger.error('API error:', error)
+        console.error('API error:', error)
         return NextResponse.json(
             {
                 success: false,
